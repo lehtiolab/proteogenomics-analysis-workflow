@@ -1,0 +1,7 @@
+#Mods
+NumMods=2
+229.162932,*,fix,N-term,TMT6plex
+229.162932,K,fix,any,TMT6plex
+C2H3N1O1,C,fix,any,Carbamidomethyl
+O1,M,opt,any,Oxidation
+
