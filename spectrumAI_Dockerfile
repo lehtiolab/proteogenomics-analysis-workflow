@@ -5,4 +5,3 @@ COPY spectrumAI_R_requirements.R /tmp/requirements.R
 RUN apt-get install -y libnetcdf-dev
 RUN Rscript /tmp/requirements.R
 RUN git clone https://github.com/yafeng/SpectrumAI
-RUN git clone https://github.com/yafeng/proteogenomics_python

@@ -20,10 +20,13 @@ repodir = file('.')
 
 process prepareContainers {
 
+  output: val 1 into containers_done
+  
   """
   workdir=`pwd`
   cd $repodir
   docker build -f $repodir/spectrumAI_Dockerfile -t spectrumai .
+  docker build -f $repodir/pgpython_Dockerfile -t pgpython .
   """
 }
 
