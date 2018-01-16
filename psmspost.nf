@@ -58,7 +58,7 @@ process SpectrumAI {
 */
 
 
-process createFasta.Bed.GFF.txt {
+process createFastaBedGFF {
  container 'pgpython'
 
  input:
@@ -74,8 +74,7 @@ process createFasta.Bed.GFF.txt {
  """
  head -n 1 $x > novelpsms.txt
  egrep '(PGOHUM|lnc)' $x >> novelpsms.txt
-
- python2.7 /pgpython/map_novelpeptide2genome.py --input $x --gtf $gtffile --fastadb $fafile --tab_out novel_peptides.tab.txt --fasta_out novel_peptides_fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
+ python3 /pgpython/map_novelpeptide2genome.py --input $x --gtf $gtffile --fastadb $fafile --tab_out novel_peptides.tab.txt --fasta_out novel_peptides_fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
 
  """
 }
