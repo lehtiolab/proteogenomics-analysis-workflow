@@ -13,7 +13,6 @@ dependencies in special dir
 
 /* SET DEFAULT PARAMS */
 params.blastdb = 'UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta'
-params.specfilecol = 1  /* Spectra file column nr in PSM table (first col is 1) */
 gtffile = file(params.gtf)
 fafile = file(params.fasta)
 
@@ -22,6 +21,7 @@ repodir = file('.')
 
 /* PIPELINE START */
 specaimzmls = Channel.fromPath(params.mzmls).collect()
+peptidetable = Channel.fromPath(params.peptable)
 
 /*
 process prepareContainers {
@@ -74,7 +74,23 @@ process SpectrumAI {
   for fn in $x; do ln -s ../\$fn .; done
   cd ..
   ls mzmls
-  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in $params.specfilecol specairesult.txt
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in specairesult.txt
+  """
+}
+
+
+process SpectrumAIOutParse {
+
+  container 'pgpython'
+
+  input:
+  file x from specai
+  file 'peptide_table.txt' from peptidetable
+
+  """
+  echo ha
+  python2.7 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output parsed_specai.txt
+  echo he
   """
 }
 
@@ -101,6 +117,7 @@ process createFasta.Bed.GFF.txt {
 
  """
 }
+*/
 
 /*
 process BlastPNovel {
@@ -167,18 +184,4 @@ process makePlots {
 
 }
 
-process variantPsmTable {
-
-  input:
-  file x from variantpsms
-  
-  output:
-  file 'varpsms.txt' into variantpeptides
-  
-  """
-  echo jellop
-  """
-}
 */
-
-
