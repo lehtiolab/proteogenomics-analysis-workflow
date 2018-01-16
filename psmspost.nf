@@ -13,6 +13,7 @@ dependencies in special dir
 
 /* SET DEFAULT PARAMS */
 params.blastdb = 'UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta'
+params.genomeFasta = 'hg19.fa'
 gtffile = file(params.gtf)
 fafile = file(params.fasta)
 
@@ -79,7 +80,6 @@ process createFasta.Bed.GFF.txt {
  """
 }
 
-/*
 process BlastPNovel {
 
   container 'quay.io/biocontainers/blast:2.7.1--boost1.64_1'
@@ -95,6 +95,24 @@ process BlastPNovel {
   """
 }
 
+process ParseBlastpOut {
+ container 'pypython'
+ 
+ input:
+ file novelpep from novelpep
+ file novelblast from novelblast
+
+ output:
+ file 'peptable_blastp' into peptableBlastp
+
+ """
+ python parse_blastp_output.py --input $novelpep --blastp_result novelblast --fasta $params.blastdb --output peptable_blastp.txt
+
+ """
+
+}
+
+/*
 process BLATNovel {
   container ''
 
@@ -102,11 +120,27 @@ process BLATNovel {
   file novelfasta from novelfasta
 
   output:
-  file 'blat_out.txt' into novelblat
+  file 'blat_out.pslx' into novelblat
 
   """
-  blat -db $params.genomedb -query $novelfasta 
+  blat $params.genomeFasta $novelfasta -t=dnax -q=prot -tileSize=5 -minIdentity=99 -out=pslx blat_out.pslx 
+  """
+}
 
+process parseBLATout {
+ container 'pypython'
+
+ input:
+ file novelblat from novelblat
+ file novelpep from novelpep
+
+ output:
+ file 'peptable_blat.txt' into peptableBlat
+
+ """
+ python parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
+
+ """
 }
 
 process labelnsSNP {
