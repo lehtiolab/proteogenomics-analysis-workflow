@@ -13,6 +13,7 @@ dependencies in special dir
 
 /* SET DEFAULT PARAMS */
 params.blastdb = 'UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta'
+params.specfilecol = 1  /* Spectra file column nr in PSM table (first col is 1) */
 gtffile = file(params.gtf)
 fafile = file(params.fasta)
 
@@ -20,7 +21,9 @@ repodir = file('.')
 
 
 /* PIPELINE START */
+specaimzmls = Channel.fromPath(params.mzmls).collect()
 
+/*
 process prepareContainers {
 
   output: val 1 into containers_done
@@ -32,34 +35,54 @@ process prepareContainers {
   docker build -f $repodir/pgpython_Dockerfile -t pgpython .
   """
 }
-
+*/
+containers_done = Channel.from(1)
 Channel.fromPath(params.psms).into{novelpsms; variantpsms}
 
-/*
-process SpectrumAI {
 
-  container 'spectrumai'
+process prepSpectrumAI {
+
+  container 'pgpython'
   
   input:
+  val tf from containers_done
   file x from variantpsms
   
   output:
-  file 'parsed_specai.txt'
+  file 'specai_in.txt' into specai_input
   
   """
-  head -n 1 $x > novelpsms.txt
-  egrep '(PGOHUM|lnc)' $x >> novelpsms.txt
-  python2.7 label_sub_pos.py --input_psm novelpsms.txt --peptide_column "Peptide" --output variantpep_sub.psm.txt
-  RScript 
-  python2.7 /Z/jorrit/proteogenomics_python/parse_spectrumAI_out.py --spectrumAI_out specAIout.txt --input example_vardb_6rf_novpep.hg19cor.blastp.annovar.txt --output parsed_specai.txt
+  head -n 1 $x > variantpsms.txt
+  egrep '(COSMIC|CanProVar)' $x >> variantpsms.txt
+  python2.7 /pgpython/label_sub_pos.py --input_psm variantpsms.txt --output specai_in.txt
   """
 }
-*/
 
+
+process SpectrumAI {
+  container 'spectrumai'
+
+  input:
+  file specai_in from specai_input
+  file x from specaimzmls
+
+  output: file 'specairesult.txt' into specai
+
+  """
+  mkdir mzmls
+  cd mzmls
+  for fn in $x; do ln -s ../\$fn .; done
+  cd ..
+  ls mzmls
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in $params.specfilecol specairesult.txt
+  """
+}
+
+
+/*
 
 process createFasta.Bed.GFF.txt {
  container 'pgpython'
-
  input:
  file x from novelpsms
  val tf from containers_done
