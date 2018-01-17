@@ -12,7 +12,7 @@ dependencies in special dir
 
 
 /* SET DEFAULT PARAMS */
-blastdbfile = file(params.blastdb)
+blastdb = file(params.blastdb)
 params.genomeFasta = 'hg19.fa'
 gtffile = file(params.gtf)
 fafile = file(params.fasta)
@@ -43,6 +43,8 @@ process createFastaBedGFF {
 
  input:
  file x from novelpsms
+ file gtffile
+ file fafile
  val tf from containers_done
 
  output:
@@ -55,10 +57,11 @@ process createFastaBedGFF {
  head -n 1 $x > novelpsms.txt
  egrep '(PGOHUM|lnc)' $x >> novelpsms.txt
  python3 /pgpython/map_novelpeptide2genome.py --input novelpsms.txt --gtf $gtffile --fastadb $fafile --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
- exit 1
-
  """
 }
+
+novelpep
+  .into {blastnovelpep; blatnovelpep}
 
 process BlastPNovel {
 
@@ -66,30 +69,30 @@ process BlastPNovel {
 
   input:
   file novelfasta from novelfasta
+  file blastdb
 
   output:
   file 'blastp_out.txt' into novelblast
   
   """
-  makeblastdb -in $blastdbfile -dbtype prot
-  echo hello!
-  blastp -db $blastdbfile -query $novelfasta -outfmt '6 qseqid sseqid pident qlen slen qstart qend sstart send mismatch positive gapopen gaps qseq sseq evalue bitscore' -num_threads 8 -max_target_seqs 1 -evalue 1000 -out blastp_out.txt
+  makeblastdb -in $blastdb -dbtype prot
+  blastp -db $blastdb -query $novelfasta -outfmt '6 qseqid sseqid pident qlen slen qstart qend sstart send mismatch positive gapopen gaps qseq sseq evalue bitscore' -num_threads 8 -max_target_seqs 1 -evalue 1000 -out blastp_out.txt
   """
 }
 
 process ParseBlastpOut {
- container 'pypython'
+ container 'pgpython'
  
  input:
- file novelpep from novelpep
+ file novelpep from blastnovelpep
  file novelblast from novelblast
+ file blastdb
 
  output:
- file 'peptable_blastp' into peptableBlastp
+ file 'peptable_blastp.txt' into peptable_blastp
 
  """
- python parse_blastp_output.py --input $novelpep --blastp_result novelblast --fasta $blastdbfile --output peptable_blastp.txt
-
+ python3 /pgpython/parse_BLASTP_out.py --input $novelpep --blastp_result $novelblast --fasta $blastdb --output peptable_blastp.txt
  """
 
 }
