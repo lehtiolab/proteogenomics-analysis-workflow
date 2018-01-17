@@ -55,7 +55,7 @@ process prepSpectrumAI {
   """
   head -n 1 $x > variantpsms.txt
   egrep '(COSMIC|CanProVar)' $x >> variantpsms.txt
-  python2.7 /pgpython/label_sub_pos.py --input_psm variantpsms.txt --output specai_in.txt
+  python3 /pgpython/label_sub_pos.py --input_psm variantpsms.txt --output specai_in.txt
   """
 }
 
@@ -92,7 +92,7 @@ process SpectrumAIOutParse {
   file 'parsed_specai.txt' into variantpep_output
 
   """
-  python2.7 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output parsed_specai.txt
+  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output parsed_specai.txt
   """
 }
 
