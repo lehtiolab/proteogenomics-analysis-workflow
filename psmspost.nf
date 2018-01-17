@@ -126,10 +126,6 @@ process labelnsSNP {
 
 }
 
-process anovar {
-
-}
-
 process phastcon {
 
 }
@@ -157,18 +153,20 @@ process makePlots {
 
 }
 
-process variantPsmTable {
-
-  input:
-  file x from variantpsms
-  
-  output:
-  file 'varpsms.txt' into variantpeptides
-  
-  """
-  echo jellop
-  """
-}
 */
 
+process annovar {
+  
+  container 'annovar'
+  
+  input:
+  file novelbed
+  output:
+  file 'novpep_annovar.variant_function' into annovar
+
+  """
+  /annovar/annotate_variation.pl -out novpep_annovar -build hg19 $novelbed /annovar/humandb/
+  """
+
+}
 
