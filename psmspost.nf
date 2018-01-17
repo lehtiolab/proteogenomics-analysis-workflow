@@ -62,13 +62,15 @@ process createFastaBedGFF {
 
 novelpep
   .into {blastnovelpep; blatnovelpep}
+novelfasta
+  .into {blastnovelfasta; blatnovelfasta}
 
 process BlastPNovel {
 
   container 'quay.io/biocontainers/blast:2.7.1--boost1.64_1'
 
   input:
-  file novelfasta from novelfasta
+  file novelfasta from blastnovelfasta
   file blastdb
 
   output:
@@ -97,12 +99,12 @@ process ParseBlastpOut {
 
 }
 
-/*
+
 process BLATNovel {
-  container ''
+  container 'quay.io/biocontainers/blat:35--1'
 
   input:
-  file novelfasta from novelfasta
+  file novelfasta from blatnovelfasta
 
   output:
   file 'blat_out.pslx' into novelblat
@@ -117,17 +119,18 @@ process parseBLATout {
 
  input:
  file novelblat from novelblat
- file novelpep from novelpep
+ file novelpep from blatnovelpep
 
  output:
  file 'peptable_blat.txt' into peptableBlat
 
  """
- python parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
+ python3 parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
 
  """
 }
 
+/*
 process labelnsSNP {
 
 }
@@ -141,14 +144,6 @@ process phyloCSF {
 }
 
 process scanBam {
-
-}
-
-process parseBlastpOutput{
-
-}
-
-process parseBlatOutput{
 
 }
 
