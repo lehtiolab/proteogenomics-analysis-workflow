@@ -33,30 +33,10 @@ process prepareContainers {
   docker build -f $repodir/pgpython_Dockerfile -t pgpython .
   """
 }
-
-Channel.fromPath(params.psms).into{novelpsms; variantpsms}
-
-/*
-process SpectrumAI {
-
-  container 'spectrumai'
-  
-  input:
-  file x from variantpsms
-  
-  output:
-  file 'parsed_specai.txt'
-  
-  """
-  head -n 1 $x > novelpsms.txt
-  egrep '(PGOHUM|lnc)' $x >> novelpsms.txt
-  python2.7 label_sub_pos.py --input_psm novelpsms.txt --peptide_column "Peptide" --output variantpep_sub.psm.txt
-  RScript 
-  python2.7 /Z/jorrit/proteogenomics_python/parse_spectrumAI_out.py --spectrumAI_out specAIout.txt --input example_vardb_6rf_novpep.hg19cor.blastp.annovar.txt --output parsed_specai.txt
-  """
-}
 */
 
+Channel.fromPath(params.psms).into{novelpsms; variantpsms}
+containers_done = Channel.from(1)
 
 process createFastaBedGFF {
  container 'pgpython'
@@ -69,12 +49,12 @@ process createFastaBedGFF {
  file 'novel_peptides.fa' into novelfasta
  file 'novel_peptides.bed' into novelbed
  file 'novel_peptides.gff3' into novelGFF3
- file 'novep_peptides.tab.txt' into novelpep
+ file 'novel_peptides.tab.txt' into novelpep
 
  """
  head -n 1 $x > novelpsms.txt
  egrep '(PGOHUM|lnc)' $x >> novelpsms.txt
- python3 /pgpython/map_novelpeptide2genome.py --input $x --gtf $gtffile --fastadb $fafile --tab_out novel_peptides.tab.txt --fasta_out novel_peptides_fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
+ python3 /pgpython/map_novelpeptide2genome.py --input novelpsms.txt --gtf $gtffile --fastadb $fafile --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
 
  """
 }
