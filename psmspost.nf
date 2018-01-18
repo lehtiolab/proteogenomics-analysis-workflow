@@ -12,9 +12,12 @@ dependencies in special dir
 
 
 /* SET DEFAULT PARAMS */
-blastdb = file(params.blastdb)
 params.genomeFasta = 'hg19.fa'
+
+blastdb = file(params.blastdb)
 gtffile = file(params.gtf)
+snpdb = file(params.snpdb)
+genomefa = file(params.genomeFasta)
 fafile = file(params.fasta)
 
 repodir = file('.')
@@ -61,7 +64,7 @@ process createFastaBedGFF {
 }
 
 novelpep
-  .into {blastnovelpep; blatnovelpep}
+  .into {blastnovelpep; blatnovelpep; annonovelpep; snpnovelpep}
 novelfasta
   .into {blastnovelfasta; blatnovelfasta}
 
@@ -99,52 +102,96 @@ process ParseBlastpOut {
 
 }
 
-
 process BLATNovel {
   container 'quay.io/biocontainers/blat:35--1'
 
   input:
   file novelfasta from blatnovelfasta
+  file genomefa
 
   output:
   file 'blat_out.pslx' into novelblat
 
   """
-  blat $params.genomeFasta $novelfasta -t=dnax -q=prot -tileSize=5 -minIdentity=99 -out=pslx blat_out.pslx 
+  blat $genomefa $novelfasta -t=dnax -q=prot -tileSize=5 -minIdentity=99 -out=pslx blat_out.pslx 
   """
 }
 
 process parseBLATout {
- container 'pypython'
+ container 'pgpython'
 
  input:
  file novelblat from novelblat
  file novelpep from blatnovelpep
 
  output:
- file 'peptable_blat.txt' into peptableBlat
+ file 'peptable_blat.txt' into peptable_blat
 
  """
- python3 parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
+ python3 /pgpython/parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
 
  """
 }
 
-/*
 process labelnsSNP {
+  
+  container 'pgpython'
+  
+  input:
+  file peptable from snpnovelpep
+  file snpdb
 
+  output:
+  file 'nssnp.txt' into ns_snp_out
+
+  """
+  echo hello
+  python3 /pgpython/label_nsSNP_pep.py --input $peptable --nsSNPdb $snpdb --output nssnp.txt
+  """
 }
 
-process phastcon {
+novelGFF3
+  .into { novelGFF3_phast; novelGFF3_phylo; novelGFF3_bams }
 
+process phastcons {
+  container 'phastcons'
+  
+  input:
+  file novelgff from novelGFF3_phast
+  output:
+  file 'phastcons.txt' into phastcons_out
+
+  """
+  python3 /pgpython/calculate_phastcons.py $novelgff /hg19.100way.phastCons.bw phastcons.txt
+  """
 }
 
 process phyloCSF {
+  
+  container 'phylocsf'
+
+  input:
+  file novelgff from novelGFF3_phylo
+
+  """
+  python3 /pgpython/calculate_phylocsf.py $novelgff > phylocsf.txt
+  """
 
 }
+/*
+process scanBams {
+  container 'pgpython'
 
-process scanBam {
+  input:
+  file gff from novelGFF3_bams
+  file bams from bamFiles
+  
+  output:
+  file 'scannedbams.txt' into scannedbams
 
+  """
+  python3 /pgpython/scan_bams.py  --gff_input $gff --bam_files $bams --output scannedbams.txt
+  """
 }
 
 process combineResults{
@@ -163,7 +210,7 @@ process annovar {
   input:
   file novelbed
   output:
-  file 'novpep_annovar.variant_function' into annovar
+  file 'novpep_annovar.variant_function' into annovar_out
 
   """
   /annovar/annotate_variation.pl -out novpep_annovar -build hg19 $novelbed /annovar/humandb/
@@ -171,3 +218,18 @@ process annovar {
 
 }
 
+process parseAnnovarOut {
+  
+  container 'pgpython'
+  
+  input:
+  file anno from annovar_out
+  file novelpep from annonovelpep
+
+  output:
+  file 'parsed_annovar.txt' into annovar_parsed
+
+  """
+  python3 /pgpython/parse_annovar_out.py --input $novelpep --output parsed_annovar.txt --annovar_out $anno 
+  """
+}
