@@ -145,7 +145,6 @@ process labelnsSNP {
   file 'nssnp.txt' into ns_snp_out
 
   """
-  echo hello
   python3 /pgpython/label_nsSNP_pep.py --input $peptable --nsSNPdb $snpdb --output nssnp.txt
   """
 }
@@ -154,7 +153,7 @@ novelGFF3
   .into { novelGFF3_phast; novelGFF3_phylo; novelGFF3_bams }
 
 process phastcons {
-  container 'phastcons'
+  container 'pgpython'
   
   input:
   file novelgff from novelGFF3_phast
@@ -162,23 +161,34 @@ process phastcons {
   file 'phastcons.txt' into phastcons_out
 
   """
-  python3 /pgpython/calculate_phastcons.py $novelgff /hg19.100way.phastCons.bw phastcons.txt
+  python3 /pgpython/calculate_phastcons.py $novelgff /bigwigs/hg19.100way.phastCons.bw phastcons.txt
   """
 }
 
 process phyloCSF {
   
-  container 'phylocsf'
+  container 'pgpython'
 
   input:
   file novelgff from novelGFF3_phylo
 
+  output:
+  file 'phylocsf.txt' into phylocsf_out
+
   """
-  python3 /pgpython/calculate_phylocsf.py $novelgff > phylocsf.txt
+  python3 /pgpython/calculate_phylocsf.py $novelgff /bigwigs phylocsf.txt
   """
 
 }
-/*
+
+
+/* FIXME this needs to be made conditional */
+
+bamFiles = Channel
+  .fromPath(params.bamfiles)
+  .map { fn -> [ fn, fn + '.bai' ] }
+  .collect()
+
 process scanBams {
   container 'pgpython'
 
@@ -190,10 +200,12 @@ process scanBams {
   file 'scannedbams.txt' into scannedbams
 
   """
-  python3 /pgpython/scan_bams.py  --gff_input $gff --bam_files $bams --output scannedbams.txt
+  ls *.bam > bamfiles.txt
+  python3 /pgpython/scan_bams.py  --gff_input $gff --bam_files bamfiles.txt --output scannedbams.txt
   """
 }
 
+/*
 process combineResults{
 }
 
