@@ -12,12 +12,16 @@ dependencies in special dir
 
 
 /* SET DEFAULT PARAMS */
-params.genomeFasta = 'hg19.fa'
+params.gtf = 'vardb.gtf'
+params.blastdb = 'Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa'
+params.snpdb = 'MSCanProVar_ensemblV79.filtered.fa'
+params.genome = 'hg19.fa'
+
 
 blastdb = file(params.blastdb)
 gtffile = file(params.gtf)
 snpdb = file(params.snpdb)
-genomefa = file(params.genomeFasta)
+genomefa = file(params.genome)
 fafile = file(params.fasta)
 
 repodir = file('.')
