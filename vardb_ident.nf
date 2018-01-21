@@ -19,14 +19,36 @@ ddb = file(params.ddb)
 
 /* PIPELINE START */
 
-Channel.fromPath(params.mzmls).into{tmzmls; dmzmls}
+Channel
+  .fromPath(params.mzmls)
+  .map { it -> ['setA', it.name.replace('.mzML', ''), it] }
+  .into{ dmzmls; tmzmls }
 
+process Test {
+  input:
+  set val(setname), val(filename), file(x) from tmzmls
+  output:
+  set val(setname), val(filename), file(x) into testfns
+  """
+  echo hei
+  """
+}
+
+testfns
+  .map{ it -> [set: it[0], sample: it[1], file: it[2]] }
+  .buffer(size: 6)
+  .flatMap{ it.sort( {a, b -> a['set'] <=> b['set'] ?: a['sample'] <=> b['sample'] }) }
+  .buffer(size: params.ppoolsize, remainder: true)
+  .subscribe{ println(it) }
+
+/*
 process msgfPlusTarget {
 
   container 'quay.io/biocontainers/msgf_plus:2017.07.21--py27_0'
 
   input:
-  file x from tmzmls
+  set val(setname), file(x) from tmzmls
+  file tdb
 
   output:
   file 'toutmzid.mzid' into tmzids
@@ -37,18 +59,18 @@ process msgfPlusTarget {
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i toutmzid.mzid -o touttsv.tsv
   """
 }
-
-
+*/
 process msgfPlusDecoy {
 
   container 'quay.io/biocontainers/msgf_plus:2017.07.21--py27_0'
 
   input:
-  file x from dmzmls
+  set val(setname), val(sample), file(x) from dmzmls
+  file ddb
 
   output:
-  file 'doutmzid.mzid' into dmzids
-  file 'douttsv.tsv' into dmzidtsvs
+  set val(setname), val(sample), file('doutmzid.mzid') into dmzids
+  set val(setname), val(sample), file('douttsv.tsv') into dmzidtsvs
   
   """
   msgf_plus -Xmx16G -d $ddb -s $x -o doutmzid.mzid -thread 12 -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol 4 -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
@@ -56,16 +78,19 @@ process msgfPlusDecoy {
   """
 }
 
+dmzids
+  .map{ it -> [set: it[0], sample: it[1], file: it[2]] }
+  .buffer(size: 6)
+  .flatMap{ it.sort( {a, b -> a['set'] <=> b['set'] ?: a['sample'] <=> b['sample'] }) }
+  .tap { singledmzids }
+  .buffer(size: params.ppoolsize, remainder: true)
+  .subscribe{ println(it) }
 
-bufferedtmzids = tmzids.tap{ singletmzids }.buffer(size: params.ppoolsize, remainder: true)
-buffereddmzids = dmzids.tap{ singledmzids }.buffer(size: params.ppoolsize, remainder: true)
-
+/*
 
 process percolator {
   
-  /* container 'quay.io/biocontainers/percolator:3.1--boost_1.622' */
-  container 'quay.io/biocontainers/percolator:3.1--boost_1.622'
-  
+  container 'quay.io/biocontainers/percolator:3.1--boost_1.623'
 
   input:
   file 'tmzid' from bufferedtmzids
@@ -82,6 +107,7 @@ process percolator {
   percolator -j percoin.xml -X perco.xml --decoy-xml-output -y
   """
 }
+*/
 
 
 /*
