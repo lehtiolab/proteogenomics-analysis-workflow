@@ -28,23 +28,14 @@ repodir = file('.')
 
 
 /* PIPELINE START */
-/*
-process prepareContainers {
-
-  output: val 1 into containers_done
-  
-  """
-  workdir=`pwd`
-  cd $repodir
-  docker build -f $repodir/spectrumAI_Dockerfile -t spectrumai .
-  docker build -f $repodir/pgpython_Dockerfile -t pgpython .
-  """
-}
-*/
 
 psms = Channel.fromPath(params.psms)
-singlemismatch_nov_mzmls = Channel.fromPath(params.mzmls).collect()
-containers_done = Channel.from(1)
+peptidetable = Channel.fromPath(params.peptable)
+Channel
+  .fromPath(params.mzmls)
+  .collect()
+  .into { specaimzmls; singlemismatch_nov_mzmls }
+
 
 process SplitPSMTableNovelVariant {
   input:
@@ -62,8 +53,10 @@ process SplitPSMTableNovelVariant {
   """
 }
 
+
 novelpsms
   .into{novelpsmsFastaBedGFF; novelpsms_specai}
+
 
 process createFastaBedGFF {
  container 'pgpython'
@@ -72,7 +65,6 @@ process createFastaBedGFF {
  file novelpsmsFastaBedGFF
  file gtffile
  file fafile
- val tf from containers_done
 
  output:
  file 'novel_peptides.fa' into novelfasta
@@ -304,7 +296,7 @@ process parseAnnovarOut {
 
 process combineResults{
   
-  container 'ubuntu:latest'
+  container 'pgpython'
 
   input:
   file a from ns_snp_out
@@ -316,7 +308,7 @@ process combineResults{
   file g from scannedbams
   
   output:
-  file 'outfile' into combined_novelpep_output
+  file 'combined' into combined_novelpep_output
   
   """
   for fn in $a $b $c $d $e $f $g; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
@@ -326,11 +318,84 @@ process combineResults{
   join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
   join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
   join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
-  grep '^Peptide' joined6 > outfile
-  grep -v '^Peptide' joined6 >> outfile
+  grep '^Peptide' joined6 > combined
+  grep -v '^Peptide' joined6 >> combined
   """
 }
 
-combined_novelpep_output
-  .collectFile(name: file(params.novpepout))
-  .println {"Variant peptides saved to file: $it" }
+
+process addLociNovelPeptides{
+  
+  container 'pgpython'
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true
+
+  input:
+  file x from combined_novelpep_output
+  
+  output:
+  val('Finished validating novel peptides') into novelreport
+  
+  """
+  python3 /pgpython/group_novpepToLoci.py  --input $x --output novel_peptides.txt --distance 10kb
+  """
+}
+
+
+process prepSpectrumAI {
+
+  container 'pgpython'
+  
+  input:
+  file x from variantpsms
+  
+  output:
+  file 'specai_in.txt' into specai_input
+  
+  """
+  head -n 1 $x > variantpsms.txt
+  egrep '(COSMIC|CanProVar)' $x >> variantpsms.txt
+  python3 /pgpython/label_sub_pos.py --input_psm variantpsms.txt --output specai_in.txt
+  """
+}
+
+
+process SpectrumAI {
+  container 'spectrumai'
+
+  input:
+  file specai_in from specai_input
+  file x from specaimzmls
+
+  output: file 'specairesult.txt' into specai
+
+  """
+  mkdir mzmls
+  cd mzmls
+  for fn in $x; do ln -s ../\$fn .; done
+  cd ..
+  ls mzmls
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in specairesult.txt
+  """
+}
+
+
+process SpectrumAIOutParse {
+
+  container 'pgpython'
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true
+
+  input:
+  file x from specai
+  file 'peptide_table.txt' from peptidetable
+  
+  output:
+  val('Finished validating variant peptides') into variantreport
+
+  """
+  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output variant_peptides.txt
+  """
+}
+
+variantreport
+  .mix(novelreport)
+  .subscribe { println(it) }
