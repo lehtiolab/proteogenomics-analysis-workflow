@@ -42,14 +42,34 @@ process prepareContainers {
 }
 */
 
-Channel.fromPath(params.psms).into{novelpsms; variantpsms}
+psms = Channel.fromPath(params.psms)
+singlemismatch_nov_mzmls = Channel.fromPath(params.mzmls).collect()
 containers_done = Channel.from(1)
+
+process SplitPSMTableNovelVariant {
+  input:
+  file x from psms
+  
+  output:
+  file 'variantpsms' into variantpsms
+  file 'novelpsms' into novelpsms
+
+  """
+  head -n 1 $x > variantpsms
+  head -n 1 $x > novelpsms
+  egrep '(PGOHUM|lnc)' $x >> novelpsms
+  egrep '(COSMIC|CanProVar)' $x >> variantpsms
+  """
+}
+
+novelpsms
+  .into{novelpsmsFastaBedGFF; novelpsms_specai}
 
 process createFastaBedGFF {
  container 'pgpython'
 
  input:
- file x from novelpsms
+ file novelpsmsFastaBedGFF
  file gtffile
  file fafile
  val tf from containers_done
@@ -61,9 +81,7 @@ process createFastaBedGFF {
  file 'novel_peptides.tab.txt' into novelpep
 
  """
- head -n 1 $x > novelpsms.txt
- egrep '(PGOHUM|lnc)' $x >> novelpsms.txt
- python3 /pgpython/map_novelpeptide2genome.py --input novelpsms.txt --gtf $gtffile --fastadb $fafile --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
+ python3 /pgpython/map_novelpeptide2genome.py --input $novelpsmsFastaBedGFF --gtf $gtffile --fastadb $fafile --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
  """
 }
 
@@ -93,17 +111,54 @@ process ParseBlastpOut {
  container 'pgpython'
  
  input:
+ file novelpsms from novelpsms_specai
  file novelpep from blastnovelpep
  file novelblast from novelblast
  file blastdb
 
  output:
  file 'peptable_blastp.txt' into peptable_blastp
+ file 'single_mismatch_novpeps.txt' into novpeps_singlemis
 
  """
  python3 /pgpython/parse_BLASTP_out.py --input $novelpep --blastp_result $novelblast --fasta $blastdb --output peptable_blastp.txt
+ python3 /pgpython/extract_1mismatch_novpsm.py peptable_blastp.txt $novelpsms single_mismatch_novpeps.txt
  """
 
+}
+
+process ValidateSingleMismatchNovpeps {
+  container 'spectrumai'
+  
+  input:
+  file x from novpeps_singlemis
+  file mzml from singlemismatch_nov_mzmls
+
+  output:
+  file 'singlemis_specai.txt' into singlemis_specai
+
+  """
+  mkdir mzmls
+  cd mzmls
+  for fn in $mzml; do ln -s ../\$fn .; done
+  cd ..
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $x singlemis_specai.txt
+  """
+}
+
+process novpepSpecAIOutParse {
+  container 'pgpython'
+
+  input:
+  file x from singlemis_specai 
+  file 'peptide_table.txt' from peptable_blastp 
+  
+  output:
+  file 'novpep_specai.txt' into novpep_singlemisspecai
+
+  """
+  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_specai.txt
+  """
 }
 
 process BLATNovel {
@@ -210,9 +265,6 @@ process scanBams {
 }
 
 /*
-process combineResults{
-}
-
 process makePlots {
 
 }
@@ -249,3 +301,33 @@ process parseAnnovarOut {
   python3 /pgpython/parse_annovar_out.py --input $novelpep --output parsed_annovar.txt --annovar_out $anno 
   """
 }
+
+process combineResults{
+  input:
+  file a from ns_snp_out
+  file b from novpep_singlemisspecai
+  file c from peptable_blat
+  file d from annovar_parsed
+  file e from phastcons_out
+  file f from phylocsf_out
+  file g from scannedbams
+  
+  output:
+  file 'outfile' into combined_novelpep_output
+  
+  """
+  for fn in $a $b $c $d $e $f $g; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
+  join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
+  join joined1 $c -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined2
+  join joined2 $d -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined3
+  join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
+  join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
+  join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
+  grep '^Peptide' joined6 > outfile
+  grep -v '^Peptide' joined6 >> outfile
+  """
+}
+
+combined_novelpep_output
+  .collectFile(name: file(params.novpepout))
+  .println {"Variant peptides saved to file: $it" }
