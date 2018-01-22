@@ -303,6 +303,9 @@ process parseAnnovarOut {
 }
 
 process combineResults{
+  
+  container 'ubuntu:latest'
+
   input:
   file a from ns_snp_out
   file b from novpep_singlemisspecai
