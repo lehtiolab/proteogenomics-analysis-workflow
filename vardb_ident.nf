@@ -398,8 +398,10 @@ process annotateMzidTSVPercolator {
   output:
   file "${sample}.txt" into psmsperco
   """
-  msspsmtable percolator -i $psms -o novperco.txt --mzid varmzid
-  msspsmtable percolator -i novperco.txt -o ${sample}.txt --mzid novmzid
+  cp $psms varpsms
+  msspsmtable percolator -i $psms -o novperco --mzid varmzid
+  msspsmtable percolator -i varpsms -o varperco --mzid novmzid
+  cat novperco <( tail -n+2 varperco) > ${sample}.txt 
   """
 }
 
@@ -417,6 +419,7 @@ process createPSMTable {
 
   output:
   file 'psmtable.txt' into psmtable
+  file 'tmp_*' into prepeptables
 
   """
   msspsmtable merge -o psms.txt -i psms*
@@ -425,36 +428,27 @@ process createPSMTable {
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
   msspsmtable specdata -i filtpep --dbfile psmlookup -o psmtable.txt
+  mkdir splitpsms
+  msspsmtable split -i psmtable.txt --splitcol 2 -d splitpsms
+  for fn in `ls splitpsms`;do msspeptable psm2pep -i splitpsms/\$fn -o tmp_\$fn --scorecolpattern svm --spectracol 1; done
   """
-  
 }
-/*
 
-  .choice(tmzids, dmzids) { it -> it['td'] == 'target' ? 0 : 1}
-process collectPSMFractions {
+prepeptables
+  .flatten()
+  .set { prepeptable }
+
+process peptable {
+
+  container 'ubuntu:latest'
+
   input:
-  file 'psms_*' from tmzidtsvs.collect()
+  file x from prepeptable
 
   output:
-  file 'mergedpsms.txt' into mergedpsms
+  file 'peptable.txt' into peptable
 
   """
-  echo psms_* && head -n 1 psms_1 > mergedpsms.txt && tail -n+2 psms_* >> mergedpsms.txt
-  """
-}
-process createNovelPeptideTable {
-  input:
-  file psms from mergedpsms
-
-  output:
-  file 'peptides.txt' into novelpeptides
-  
-
-  """
-  source $params.venv/bin/activate
-  msspeptable psm2pep -i $psms -o peptides.txt --spectracol 1 --scorecolpattern 'MSGFScore' 
+  paste <( cut -f 12 $x) <( cut -f 1-11,13-22 $x) > peptable.txt
   """
 }
-
-*/
-
