@@ -14,13 +14,15 @@ dependencies in special dir
 /* SET DEFAULT PARAMS */
 params.gtf = 'vardb.gtf'
 params.blastdb = 'Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa'
-params.snpdb = 'MSCanProVar_ensemblV79.filtered.fa'
+params.snpfa = 'MSCanProVar_ensemblV79.filtered.fa'
 params.genome = 'hg19.fa'
 
 
 blastdb = file(params.blastdb)
 gtffile = file(params.gtf)
-snpdb = file(params.snpdb)
+snpfa = file(params.snpfa)
+dbsnp = file(params.dbsnp)
+cosmic = file(params.cosmic)
 genomefa = file(params.genome)
 fafile = file(params.fasta)
 
@@ -190,13 +192,13 @@ process labelnsSNP {
   
   input:
   file peptable from snpnovelpep
-  file snpdb
+  file snpfa
 
   output:
   file 'nssnp.txt' into ns_snp_out
 
   """
-  python3 /pgpython/label_nsSNP_pep.py --input $peptable --nsSNPdb $snpdb --output nssnp.txt
+  python3 /pgpython/label_nsSNP_pep.py --input $peptable --nsSNPdb $snpfa --output nssnp.txt
   """
 }
 
@@ -334,6 +336,7 @@ process addLociNovelPeptides{
   
   output:
   val('Finished validating novel peptides') into novelreport
+  file 'novel_peptides.txt' into novpeps_finished
   
   """
   python3 /pgpython/group_novpepToLoci.py  --input $x --output novel_peptides.txt --distance 10kb
@@ -387,12 +390,17 @@ process SpectrumAIOutParse {
   input:
   file x from specai
   file 'peptide_table.txt' from peptidetable
+  file cosmic
+  file dbsnp
   
   output:
   val('Finished validating variant peptides') into variantreport
+  file 'variant_peptides.txt' into varpeps_finished
+  file 'saav.pep.hg19cor.txt' into saavvcfs_finished
 
   """
   python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output variant_peptides.txt
+  python3 /pgpython/map_cosmic_snp_tohg19.py --input variant_peptides.txt --output saav.pep.hg19cor.txt --cosmic_input $cosmic --dbsnp_input $dbsnp
   """
 }
 
