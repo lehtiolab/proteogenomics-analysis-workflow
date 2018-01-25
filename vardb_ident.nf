@@ -27,8 +27,9 @@ Channel
   .map { it -> it.tokenize() }
   .tap { countmzmls; countsets }
   .map { it -> [it[1], it[2], it[0].replaceFirst(/.*fr(\d\d).*/, "\$1").toInteger(), it[0].replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), file(it[0])] }
+  .tap { mzmls }
   .combine(dbs)
-  .set{ mzmls }
+  .set{ dbmzmls }
 
 countmzmls
   .count()
@@ -37,6 +38,18 @@ countmzmls
 countsets
   .countBy{ it[1] }
   .set{ amount_sets }
+
+mzmlsets = Channel.create()
+mzmlfiles = Channel.create()
+mzmls
+  .separate(mzmlsets, mzmlfiles) { it -> [it[0], it[4]] }
+
+mzmlfiles
+  .collect()
+  .set { mzmlfiles_all }
+mzmlsets
+  .collect()
+  .set { mzmlsets_all }
 
 process makeProtSeq {
 
@@ -67,14 +80,33 @@ process makeTrypSeq {
   msslookup seqspace -i $knownproteins --insourcefrag
   """
 }
+process createSpectraLookup {
+
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+
+  input:
+  file mzmlfiles_all
+  val mzmlsets_all
+  
+  output:
+  file 'mslookup_db.sqlite' into spec_lookup
+
+  """
+  msslookup spectra -i ${mzmlfiles_all.join(' ')} --setnames  ${mzmlsets_all.join(' ')}
+  """
+}
+
 
 process msgfPlus {
 
-  /* container 'quay.io/biocontainers/msgf_plus:2017.07.21--py27_0' */
+  /* Latest version has problems when converting to TSV, possible too long identifiers 
+     So we use an older version
+     LATEST TESTED: container 'quay.io/biocontainers/msgf_plus:2017.07.21--py27_0'
+  */
   container 'quay.io/biocontainers/msgf_plus:2016.10.26--py27_1'
 
   input:
-  set val(setname), val(order), val(fraction), val(sample), file(x), val(td), file(db) from mzmls
+  set val(setname), val(order), val(fraction), val(sample), file(x), val(td), file(db) from dbmzmls
 
   output:
   set val(setname), val(order), val(fraction), val(sample), file("${sample}.mzid"), val(td) into mzids
@@ -136,8 +168,8 @@ process filterPercolator {
 
   input:
   set val(setname), file(x) from percolated
-  file trypseqdb
-  file protseqdb 
+  file 'trypseqdb' from trypseqdb
+  file 'protseqdb' from protseqdb
   file knownproteins
 
   output:
@@ -149,10 +181,10 @@ process filterPercolator {
   msspercolator splittd -i perco.xml 
   msspercolator splitprotein -i perco.xml_target.xml --protheaders '^PGOHUM;^lnc' '^COSMIC;^CanProVar'
   msspercolator splitprotein -i perco.xml_decoy.xml --protheaders '^decoy_PGOHUM;^decoy_lnc' '^decoy_COSMIC;^decoy_CanProVar'
-  msspercolator filterseq -i perco.xml_target.xml_h0.xml -o fs_th0.xml --dbfile $trypseqdb --insourcefrag 2 --deamidate 
-  msspercolator filterseq -i perco.xml_target.xml_h1.xml -o fs_th1.xml --dbfile $trypseqdb --insourcefrag 2 --deamidate 
-  msspercolator filterprot -i fs_th0.xml -o fp_th0.xml --fasta $knownproteins --dbfile $protseqdb --minlen 8 --deamidate --enforce-tryptic
-  msspercolator filterprot -i fs_th1.xml -o fp_th1.xml --fasta $knownproteins --dbfile $protseqdb --minlen 8 --deamidate --enforce-tryptic
+  msspercolator filterseq -i perco.xml_target.xml_h0.xml -o fs_th0.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
+  msspercolator filterseq -i perco.xml_target.xml_h1.xml -o fs_th1.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
+  msspercolator filterprot -i fs_th0.xml -o fp_th0.xml --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
+  msspercolator filterprot -i fs_th1.xml -o fp_th1.xml --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
   """
 }
 
@@ -305,7 +337,7 @@ process poutToMzidTarget {
   set val(mset), val(td), file(mzids) from tpercomzids
  
   output:
-  set val(pset), file('p2mzid/*.mzid') into tpmzid
+  set val(pset), val(peptype), file('p2mzid/*.mzid') into tpmzid
   
   """
   ls *.mzid > infiles.txt
@@ -313,13 +345,92 @@ process poutToMzidTarget {
   """
 }
 
+
+process poutToMzidDecoy {
+
+  container 'quay.io/biocontainers/pout2mzid:0.3.03--boost1.62_2'
+
+  input:
+  set val(pset), val(peptype), file('perco') from dpout_perco
+  set val(mset), val(td), file(mzids) from dpercomzids
+ 
+  output:
+  set val(pset), val(peptype), file('p2mzid/*.mzid') into dpmzid
+  
+  """
+  ls *.mzid > infiles.txt
+  pout2mzid -p perco -i . -f infiles.txt -o p2mzid -c _perco -v -d
+  """
+}
+
+
+varmzidp = Channel.create()
+novmzidp = Channel.create()
 mzidtsvs
   .buffer(size: amount_mzml.value * 2)
-  .flatMap { it.sort( {a, b -> a[1] <=> b[1] ?: a[0] <=> b[0] ?: a[2] <=> a[2]}) }
+  .flatMap { it.sort( {a, b -> a[1] <=> b[1] ?: a[0] <=> b[0] ?: a[2] <=> b[2]}) }
+  .set { sortedtsvs }
 tpmzid
-  .view()
+  .map { it -> it[2] instanceof List ? it : [it[0], it[1], [it[2]]] }
+  .buffer(size: amount_sets.value.size() * 2)
+  .flatMap { it.sort( {a, b -> a[0] <=> b[0] ?: a[2] <=> a[2]}) }
+  .transpose()
+  .set { sorted_tpmzid }
+dpmzid
+  .map { it -> it[2] instanceof List ? it : [it[0], it[1], [it[2]]] }
+  .buffer(size: amount_sets.value.size() * 2)
+  .flatMap { it.sort( {a, b -> a[0] <=> b[0] ?: a[2] <=> a[2]}) }
+  .transpose()
+  .concat(sorted_tpmzid)
+  .choice(varmzidp, novmzidp) { it -> it[1] == 'variant' ? 0 : 1}
+
+
+
+process annotateMzidTSVPercolator {
+  
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+  
+  input:
+  set val(vset), val(vartype), file('varmzid') from varmzidp
+  set val(nset), val(novtype), file('novmzid') from novmzidp
+  set val(pset), val(td), val(sample), file(psms) from sortedtsvs
+  
+  output:
+  file "${sample}.txt" into psmsperco
+  """
+  msspsmtable percolator -i $psms -o novperco.txt --mzid varmzid
+  msspsmtable percolator -i novperco.txt -o ${sample}.txt --mzid novmzid
+  """
+}
+
+psmsperco
+  .collect()
+  .set { prepsmtable }
+
+process createPSMTable {
+
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+
+  input:
+  file 'psms' from prepsmtable
+  file 'lookup' from spec_lookup
+
+  output:
+  file 'psmtable.txt' into psmtable
+
+  """
+  msspsmtable merge -o psms.txt -i psms*
+  msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
+  msspsmtable conffilt -i psms.txt -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
+  cp lookup psmlookup
+  msslookup psms -i filtpep --dbfile psmlookup
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o psmtable.txt
+  """
+  
+}
 /*
 
+  .choice(tmzids, dmzids) { it -> it['td'] == 'target' ? 0 : 1}
 process collectPSMFractions {
   input:
   file 'psms_*' from tmzidtsvs.collect()
