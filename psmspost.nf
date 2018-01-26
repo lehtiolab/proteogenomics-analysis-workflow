@@ -376,7 +376,6 @@ process SpectrumAI {
   cd mzmls
   for fn in $x; do ln -s ../\$fn .; done
   cd ..
-  ls mzmls
   Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in specairesult.txt
   """
 }
