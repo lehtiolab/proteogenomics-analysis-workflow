@@ -420,16 +420,19 @@ process annotateMzidTSVPercolator {
   set val(pset), val(td), val(sample), file(psms) from sortedtsvs
   
   output:
-  file "${sample}.txt" into psmsperco
+  set val(td), file("${sample}.txt") into psmsperco
+
   """
   cp $psms varpsms
-  msspsmtable percolator -i $psms -o novperco --mzid varmzid
-  msspsmtable percolator -i varpsms -o varperco --mzid novmzid
+  msspsmtable percolator -i $psms -o novperco --mzid novmzid
+  msspsmtable percolator -i varpsms -o varperco --mzid varmzid
   cat novperco <( tail -n+2 varperco) > ${sample}.txt 
   """
 }
 
 psmsperco
+  .filter { it[0] == 'target' }
+  .map { it -> it[1] }
   .collect()
   .set { prepsmtable }
 
