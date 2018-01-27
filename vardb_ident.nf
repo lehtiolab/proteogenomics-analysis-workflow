@@ -16,7 +16,8 @@ FIXME:
 
 nf_required_version = '0.26.0'
 if( ! nextflow.version.matches(">= ${nf_required_version}") ){
-  throw GroovyException("Nextflow version too old, ${nf_required_version} required")
+  println("Nextflow version too old, ${nf_required_version} required")
+  exit(1)
 }
 
 
