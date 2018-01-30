@@ -500,7 +500,7 @@ process createPSMPeptideTable {
   """
   msspsmtable merge -o psms.txt -i psms*
   msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
-  msspsmtable conffilt -i psms.txt -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
+  msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
   msspsmtable specdata -i filtpep --dbfile psmlookup -o psmtable.txt
