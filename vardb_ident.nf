@@ -47,6 +47,10 @@ massshifts = [tmt:0.0013, itraq:0.00125, false:0]
 massshift = massshifts[params.isobaric.replaceFirst(/[0-9]+plex/, "")]
 
 /* PIPELINE START */
+Channel
+  .fromPath(params.mzmls)
+  .count()
+  .set{ amount_mzml }
 
 Channel
   .from(['target', file(params.tdb)], ['decoy', file(params.ddb)])
@@ -54,15 +58,10 @@ Channel
 
 Channel
   .fromPath(params.mzmls)
-  .tap { countmzmls }
   .map { it -> [it.baseName.replaceFirst(/.*fr(\d\d).*/, "\$1").toInteger(), it.baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it] }
   .tap { mzmlfiles; mzml_isobaric }
   .combine(dbs)
   .set { dbmzmls }
-
-countmzmls
-  .count()
-  .set{ amount_mzml }
 
 
 println("Amount mzml is ${amount_mzml.value}")
