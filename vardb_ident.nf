@@ -130,9 +130,7 @@ isobaricxml
   .flatMap { it.sort({a, b -> a[0] <=> b[0]}) }
   .map { it -> it[1] }
   .collect()
-  .view()
   .merge( mzmlfiles_all ) { a, b -> tuple(a, b)}
-  .view()
   .set { mzml_isoxml }
 
 
@@ -474,7 +472,7 @@ psmsperco
   .collect()
   .set { prepsmtable }
 
-process createPSMTable {
+process createPSMPeptideTable {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
@@ -486,6 +484,20 @@ process createPSMTable {
   file 'psmtable.txt' into psmtable
   file 'peptide_table.txt' into prepeptable
 
+  script:
+  if(params.isobaric)
+  """
+  msspsmtable merge -o psms.txt -i psms*
+  msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
+  msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
+  cp lookup psmlookup
+  msslookup psms -i filtpep --dbfile psmlookup
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt
+  msspsmtable quant -i prepsms.txt -o psmtable.txt --dbfile psmlookup --isobaric
+  sed 's/\\#SpecFile/SpectraFile/' -i psmtable.txt
+  msspeptable psm2pep -i psmtable.txt -o peptide_table.txt --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
+  """
+  else
   """
   msspsmtable merge -o psms.txt -i psms*
   msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
