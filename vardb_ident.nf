@@ -28,6 +28,7 @@ params.gtf = 'vardb.gtf'
 params.blastdb = 'Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa'
 params.snpfa = 'MSCanProVar_ensemblV79.filtered.fa'
 params.genome = 'hg19.fa'
+params.isobaric = false
 
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
@@ -38,6 +39,11 @@ cosmic = file(params.cosmic)
 genomefa = file(params.genome)
 tdb = file(params.tdb)
 ddb = file(params.ddb)
+
+activationtype = 'High-energy collision-induced dissociation' 
+massshift = 0.0013
+
+
 /* PIPELINE START */
 
 Channel
@@ -48,7 +54,7 @@ Channel
   .fromPath(params.mzmls)
   .tap { countmzmls }
   .map { it -> [it.baseName.replaceFirst(/.*fr(\d\d).*/, "\$1").toInteger(), it.baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it] }
-  .tap { mzmlfiles }
+  .tap { mzmlfiles; mzml_isobaric }
   .combine(dbs)
   .set { dbmzmls }
 
@@ -65,7 +71,7 @@ mzmlfiles
   .map { it -> it[2] }
   .collect()
   .view()
-  .into { mzmlfiles_all; specaimzmls; singlemismatch_nov_mzmls; mzml_isobaric }
+  .into { mzmlfiles_all; specaimzmls; singlemismatch_nov_mzmls }
 
 
 process makeProtSeq {
@@ -99,16 +105,52 @@ process makeTrypSeq {
 }
 
 
+process TMTQuant {
+
+  container 'quay.io/biocontainers/openms:2.2.0--py27_boost1.64_0'
+
+  when: params.isobaric
+
+  input:
+  set val(fr), val(sample), file(infile) from mzml_isobaric
+
+  output:
+  set val(sample), file("${infile}.consensusXML") into isobaricxml
+
+  """
+  IsobaricAnalyzer  -type $params.isobaric -in $infile -out "${infile}.consensusXML" -extraction:select_activation "$activationtype" -extraction:reporter_mass_shift $massshift -extraction:min_precursor_intensity 1.0 -extraction:keep_unannotated_precursor true -quantification:isotope_correction true 
+  """
+}
+
+isobaricamount = params.isobaric ? amount_mzml.value : 1
+
+isobaricxml
+  .ifEmpty(['NA', 'NA'])
+  .buffer(size: isobaricamount)
+  .map { it.sort({a, b -> a[0] <=> b[0]}) }
+  .view()
+  .merge( mzmlfiles_all )
+  .view()
+  .set { mzml_isoxml }
+
+
 process createSpectraLookup {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
-  file mzmlfiles_all
+  set file(mzmlfiles), file(isobxml) from mzml_isoxml
   
   output:
   file 'mslookup_db.sqlite' into spec_lookup
 
+  script:
+  if(params.isobaric)
+  """
+  msslookup spectra -i ${mzmlfiles.join(' ')} --setnames  ${['setA'].multiply(amount_mzml.value).join(' ')}
+  msslookup isoquant --dbfile mslookup_db.sqlite -i ${isobxml.join(' ')} --spectra ${mzmlfiles.join(' ')}
+  """
+  else
   """
   msslookup spectra -i ${mzmlfiles_all.join(' ')} --setnames  ${['setA'].multiply(amount_mzml.value).join(' ')}
   """
