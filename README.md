@@ -53,13 +53,15 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
 ### To run
 
   + Prepare once:
+    Create account at [sanger](http://cancer.sanger.ac.uk/cosmic/help/download) for COSMIC database
+    [Register](http://annovar.openbioinformatics.org/en/latest) for download of annovar
     Download SNP data from the [UCSC table browser](https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=654845801_AIfwaTHVOpBosVlaTdk1QGgcQYrZ&clade=mammal&org=Human&db=hg38&hgta_group=varRep&hgta_track=snp142Common&hgta_table=snp142CodingDbSnp&hgta_regionType=genome&position=chr1%3A11102837-11267747&hgta_outputType=primaryTable&hgta_outFileName=snp142CodingDbSnp.txt)
   
 ```
 # Get this repo
 git clone https://github.com/proteogenomics-analysis-workflow
 cd proteogenomics-analysis-workflow
-# Get Annovar (you will need to __register__ first [here](http://annovar.openbioinformatics.org/en/latest))
+# Get Annovar
 wget __link_you_get_from_annovar__
 tar xvfz annovar.latest.tar.gz
 
@@ -77,8 +79,6 @@ wget hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/chromFaMasked.tar.gz
 tar xvfz chromFaMasked.gz
 
 # Get the COSMIC database
-# CREATE AN ACCOUNT AT SANGER, SEE http://cancer.sanger.ac.uk/cosmic/help/download
-# Then SFTP login:
 sftp 'your_email_address@example.com'@sftp-cancer.sanger.ac.uk
 # Download the data (NB you may want to download other versions)
 sftp> get cosmic/grch37/cosmic/v75/CosmicMutantExport.tsv.gz
