@@ -54,7 +54,27 @@ Channel
 
 Channel
   .from(['target', file(params.tdb)], ['decoy', file(params.ddb)])
-  .set { dbs }
+  .set { predbs }
+
+process concatFasta {
+  input:
+  set val(td), file(vardb) from predbs
+  file knownproteins
+
+  output:
+  set val(td), file('db.fa') into dbs
+
+  script:
+  if(td == "target")
+  """
+  cat $vardb $knownproteins > db.fa
+  """
+  else
+  """
+  cat $vardb > db.fa
+  """
+}
+
 
 Channel
   .fromPath(params.mzmls)
