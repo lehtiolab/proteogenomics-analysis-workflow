@@ -2,16 +2,15 @@
 vim: syntax=groovy
 -*- mode: groovy;-*-
 
-HiRIEF II varDB pipeline
-FIXME:
- - make sure docker files are ok and in right place etc. Try them!
- - nextflow version checker (min 0.26 for transpose to work)
- - merge ident and post cleanly
- - update readme
- - have fasta etc files ready for download
- - default params for everything?
- - check all FIXMEs
- - add authors in NF pipe, all commits count
+==============================
+IPAW: HiRIEF II varDB pipeline
+==============================
+@Authors
+Jorrit Boekel @glormph
+Yafeng Zhu @yafeng
+
+https://github.com/lehtiolab/proteogenomics-analysis-workflow
+
 */
 
 nf_required_version = '0.26.0'
@@ -23,11 +22,7 @@ if( ! nextflow.version.matches(">= ${nf_required_version}") ){
 
 /* SET DEFAULT PARAMS */
 mods = file('Mods.txt')
-params.ppoolsize = 2
-params.gtf = 'vardb.gtf'
-params.blastdb = 'Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa'
-params.snpfa = 'MSCanProVar_ensemblV79.filtered.fa'
-params.genome = 'hg19.fa'
+params.ppoolsize = 8
 params.isobaric = false
 params.activation = 'hcd'
 
@@ -83,8 +78,6 @@ Channel
   .combine(dbs)
   .set { dbmzmls }
 
-
-println("Amount mzml is ${amount_mzml.value}")
 mzmlfiles
   .buffer(size: amount_mzml.value)
   .flatMap { it.sort( {a, b -> a[1] <=> b[1]}) }
@@ -451,7 +444,6 @@ mzidtsvs
   .buffer(size: amount_mzml.value * 2)
   .flatMap { it.sort( {a, b -> a[0] <=> b[0] ?: a[1] <=> b[1]}) }
   .set { sortedtsvs }
-/* sort pout2 output on samplename FIXME does this work now without sets? */
 
 tpmzid
   .map { it -> it[1] instanceof List ? it : [it[0], [it[1]]] }
@@ -761,12 +753,6 @@ process scanBams {
   """
 }
 
-/*
-process makePlots {
-
-}
-
-*/
 
 process annovar {
   
@@ -875,12 +861,8 @@ process SpectrumAI {
   output: file 'specairesult.txt' into specai
 
   """
-  #mkdir mzmls
-  #for fn in $x; do ln -s `pwd`/\$fn mzmls/; done
   mkdir mzmls
-  cd mzmls
-  for fn in $x; do ln -s ../\$fn .; done
-  cd ..
+  for fn in $x; do ln -s `pwd`/\$fn mzmls/; done
   ls mzmls
   Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in specairesult.txt
   """
