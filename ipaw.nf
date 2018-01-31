@@ -41,7 +41,7 @@ activationtype = activations[params.activation]
 massshifts = [tmt:0.0013, itraq:0.00125, false:0]
 plextype = params.isobaric ? params.isobaric.replaceFirst(/[0-9]+plex/, "") : false
 massshift = massshifts[plextype]
-msgfprotocol = [tmt:4, itraq:2, false:0]
+msgfprotocol = [tmt:4, itraq:2, false:0][plextype]
 
 /* PIPELINE START */
 Channel
