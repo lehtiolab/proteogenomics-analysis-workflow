@@ -186,6 +186,7 @@ process msgfPlus {
 
   input:
   set val(fraction), val(sample), file(x), val(td), file(db) from dbmzmls
+  file mods
 
   output:
   set val(fraction), val(sample), file("${sample}.mzid"), val(td) into mzids
@@ -207,13 +208,13 @@ mzids
 
 tmzids
   .buffer(size: amount_mzml.value)
-  .flatMap { it.sort( {a, b -> a['fr'] <=> b['fr']}) }
+  .flatMap { it.sort( {a, b -> a['sample'] <=> b['sample']}) }
   .buffer(size: params.ppoolsize, remainder: true) 
   .map { it -> [it.collect() { it['fn'] }, it.collect() { it['sample'] }] }
   .set { buffer_mzid_target }
 dmzids
   .buffer(size: amount_mzml.value)
-  .flatMap { it.sort({a, b -> a['fr'] <=> b['fr'] }) }
+  .flatMap { it.sort({a, b -> a['sample'] <=> b['sample'] }) }
   .buffer(size: params.ppoolsize, remainder: true)
   .map { it -> [it.collect() { it['fn'] }, it.collect() { it['sample'] }] }
   .set { buffer_mzid_decoy }
