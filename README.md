@@ -50,12 +50,11 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
     --activation hcd  # default else use cid, etd
     ```
 
-### To run
+### Prepare once
 
-  + Prepare once:
-    Create account at [sanger](http://cancer.sanger.ac.uk/cosmic/help/download) for COSMIC database
-    [Register](http://annovar.openbioinformatics.org/en/latest) for download of annovar
-    Download SNP data from the [UCSC table browser](https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=654845801_AIfwaTHVOpBosVlaTdk1QGgcQYrZ&clade=mammal&org=Human&db=hg38&hgta_group=varRep&hgta_track=snp142Common&hgta_table=snp142CodingDbSnp&hgta_regionType=genome&position=chr1%3A11102837-11267747&hgta_outputType=primaryTable&hgta_outFileName=snp142CodingDbSnp.txt)
+  + Create account at [sanger](http://cancer.sanger.ac.uk/cosmic/help/download) for COSMIC database
+  + [Register](http://annovar.openbioinformatics.org/en/latest) for download of annovar
+  + Download SNP data from the [UCSC table browser](https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=654845801_AIfwaTHVOpBosVlaTdk1QGgcQYrZ&clade=mammal&org=Human&db=hg38&hgta_group=varRep&hgta_track=snp142Common&hgta_table=snp142CodingDbSnp&hgta_regionType=genome&position=chr1%3A11102837-11267747&hgta_outputType=primaryTable&hgta_outFileName=snp142CodingDbSnp.txt)
   
 ```
 # Get this repo
@@ -87,7 +86,7 @@ sftp> exit
 tar xvfz CosmicMutantExport.tsv.gz
 ```
 
-  + Analyse your mzML files
+### Analyse your mzML files
 
 ```
 nextflow run ipaw.nf --tdb /path/to/VarDB.fasta --ddb /path/to/decoy_VarDB.fasta \ 
