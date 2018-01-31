@@ -72,11 +72,11 @@ docker build -f pgpython_Dockerfile -t pgpython .  # downloads bigwig files, tak
 # In the meantime, download and extract varDB data (Fasta, GTF, BlastP, SNP Fasta) to a good spot
 wget http://lehtiolab.se/Supplementary_Files/varDB_data.tar.gz
 tar xvfz varDB_data.tar.gz
-for chr in {1..22} X Y M; do cat chr$chr.fa.masked >> hg19.chr1-22.X.Y.M.fa.masked; done
 
 # Get the hg19 masked genome sequence
 wget hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/chromFaMasked.tar.gz
 tar xvfz chromFaMasked.gz
+for chr in {1..22} X Y M; do cat chr$chr.fa.masked >> hg19.chr1-22.X.Y.M.fa.masked; done
 
 # Get the COSMIC database
 sftp 'your_email_address@example.com'@sftp-cancer.sanger.ac.uk
