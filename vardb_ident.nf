@@ -29,6 +29,7 @@ params.blastdb = 'Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa'
 params.snpfa = 'MSCanProVar_ensemblV79.filtered.fa'
 params.genome = 'hg19.fa'
 params.isobaric = false
+params.activation = 'hcd'
 
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
@@ -40,9 +41,10 @@ genomefa = file(params.genome)
 tdb = file(params.tdb)
 ddb = file(params.ddb)
 
-activationtype = 'High-energy collision-induced dissociation' 
-massshift = 0.0013
-
+activations = [hcd:'High-energy collision-induced dissociation', cid:'Collision-induced dissociation', etd:'Electron transfer dissociation']
+activationtype = activations[params.activation]
+massshifts = [tmt:0.0013, itraq:0.00125, false:0]
+massshift = massshifts[params.isobaric.replaceFirst(/[0-9]+plex/, "")]
 
 /* PIPELINE START */
 
@@ -66,11 +68,9 @@ countmzmls
 println("Amount mzml is ${amount_mzml.value}")
 mzmlfiles
   .buffer(size: amount_mzml.value)
-  .view()
   .flatMap { it.sort( {a, b -> a[1] <=> b[1]}) }
   .map { it -> it[2] }
   .collect()
-  .view()
   .into { mzmlfiles_all; specaimzmls; singlemismatch_nov_mzmls }
 
 
@@ -105,7 +105,7 @@ process makeTrypSeq {
 }
 
 
-process TMTQuant {
+process IsobaricQuant {
 
   container 'quay.io/biocontainers/openms:2.2.0--py27_boost1.64_0'
 
@@ -127,10 +127,10 @@ isobaricamount = params.isobaric ? amount_mzml.value : 1
 isobaricxml
   .ifEmpty(['NA', 'NA'])
   .buffer(size: isobaricamount)
-  .map { it.sort({a, b -> a[0] <=> b[0]}) }
-  .view()
-  .merge( mzmlfiles_all )
-  .view()
+  .flatMap { it.sort({a, b -> a[0] <=> b[0]}) }
+  .map { it -> it[1] }
+  .collect()
+  .merge( mzmlfiles_all ) { a, b -> tuple(a, b)}
   .set { mzml_isoxml }
 
 
@@ -139,7 +139,7 @@ process createSpectraLookup {
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
-  set file(mzmlfiles), file(isobxml) from mzml_isoxml
+  set file(isobxml), file(mzmlfiles) from mzml_isoxml
   
   output:
   file 'mslookup_db.sqlite' into spec_lookup
@@ -472,7 +472,7 @@ psmsperco
   .collect()
   .set { prepsmtable }
 
-process createPSMTable {
+process createPSMPeptideTable {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
@@ -484,6 +484,20 @@ process createPSMTable {
   file 'psmtable.txt' into psmtable
   file 'peptide_table.txt' into prepeptable
 
+  script:
+  if(params.isobaric)
+  """
+  msspsmtable merge -o psms.txt -i psms*
+  msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
+  msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
+  cp lookup psmlookup
+  msslookup psms -i filtpep --dbfile psmlookup
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt
+  msspsmtable quant -i prepsms.txt -o psmtable.txt --dbfile psmlookup --isobaric
+  sed 's/\\#SpecFile/SpectraFile/' -i psmtable.txt
+  msspeptable psm2pep -i psmtable.txt -o peptide_table.txt --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
+  """
+  else
   """
   msspsmtable merge -o psms.txt -i psms*
   msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
