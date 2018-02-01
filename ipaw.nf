@@ -539,7 +539,7 @@ process createPeptideTable{
   file 'peptide_table.txt' into peptable
 
   """
-  paste <( cut -f 12 prepeptidetable.txt) <( cut -f 1-11,13-22 prepeptidetable.txt) > peptide_table.txt
+  paste <( cut -f 12 prepeptidetable.txt) <( cut -f 13 prepeptidetable.txt) <( cut -f 3,7-9,11,14-22 prepeptidetable.txt) > peptide_table.txt
   """
 }
 
