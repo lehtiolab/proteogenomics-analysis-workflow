@@ -492,6 +492,8 @@ psmsperco
 process createPSMPeptideTable {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+  
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "psmtable.txt" ? "psmtable.txt" : null }
 
   input:
   file 'psms' from prepsmtable
