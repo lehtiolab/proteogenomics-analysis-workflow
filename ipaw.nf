@@ -147,8 +147,7 @@ isobaricxml
   .flatMap { it.sort({a, b -> a[0] <=> b[0]}) }
   .map { it -> it[1] }
   .collect()
-  .merge( mzmlfiles_all ) { a, b -> tuple(a, b)}
-  .set { mzml_isoxml }
+  .set { sorted_isoxml }
 
 
 process createSpectraLookup {
@@ -156,7 +155,8 @@ process createSpectraLookup {
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
-  set file(isobxml), file(mzmlfiles) from mzml_isoxml
+  file(isobxmls) from sorted_isoxml 
+  file(mzmlfiles) from mzmlfiles_all
   
   output:
   file 'mslookup_db.sqlite' into spec_lookup
@@ -165,7 +165,7 @@ process createSpectraLookup {
   if(params.isobaric)
   """
   msslookup spectra -i ${mzmlfiles.join(' ')} --setnames  ${['setA'].multiply(amount_mzml.value).join(' ')}
-  msslookup isoquant --dbfile mslookup_db.sqlite -i ${isobxml.join(' ')} --spectra ${mzmlfiles.join(' ')}
+  msslookup isoquant --dbfile mslookup_db.sqlite -i ${isobxmls.join(' ')} --spectra ${mzmlfiles.join(' ')}
   """
   else
   """
@@ -397,7 +397,6 @@ mzids_perco
   .groupTuple()
   .buffer(size: 2)
   .flatMap { it.sort( {a, b -> a[0] <=> b[0]}) }
-  .view()
   .into { novmzids; varmzids }
 tpercomzids = Channel.create()
 dpercomzids = Channel.create()
@@ -452,7 +451,6 @@ mzidtsvs
 
 tpmzid
   .map { it -> it[1] instanceof List ? it : [it[0], [it[1]]] }
-  .view()
   .transpose()
   .set { flat_tpmzid }
 dpmzid
