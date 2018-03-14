@@ -19,7 +19,7 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
   + mzML files containing MS data
   
     `--mzmls /path/to/\*.mzML  # mind the backslash before *`
-  + BAM and BAI files (in same directory) from RNASeq experiment
+  + __Optional__: BAM and BAI files (in same directory) from RNASeq experiment
   
     `--bamfiles /path/to/\*.bam  # mind the backslash`
   + Target, decoy FASTA and GTF of VarDB
@@ -31,7 +31,7 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
 
   + SNP and COSMIC databases
 
-    `--snpfa /path/to/SNPdb.fa` --dbsnp /path/to/SNP142CodingDbSnp.txt`
+    `--snpfa /path/to/SNPdb.fa --dbsnp /path/to/SNP142CodingDbSnp.txt`
     `--cosmic /path/to/CosmicMutantExport.tsv`
 
   + Genome Masked FASTA to BLAT against

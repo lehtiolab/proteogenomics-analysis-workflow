@@ -25,6 +25,7 @@ mods = file('Mods.txt')
 params.ppoolsize = 8
 params.isobaric = false
 params.activation = 'hcd'
+params.bamfiles = false
 
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
@@ -740,13 +741,20 @@ process phyloCSF {
 }
 
 
-bamFiles = Channel
-  .fromPath(params.bamfiles)
-  .map { fn -> [ fn, fn + '.bai' ] }
-  .collect()
+if (params.bamfiles) {
+  bamFiles = Channel
+    .fromPath(params.bamfiles)
+    .map { fn -> [ fn, fn + '.bai' ] }
+    .collect()
+} else {
+  bamFiles = Channel.empty()
+}
+
 
 process scanBams {
   container 'pgpython'
+
+  when: params.bamfiles
 
   input:
   file gff from novelGFF3_bams
@@ -809,6 +817,20 @@ process combineResults{
   output:
   file 'combined' into combined_novelpep_output
   
+  script:
+  if (!params.bamfiles)
+  """
+  for fn in $a $b $c $d $e $f $g; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
+  join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
+  join joined1 $c -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined2
+  join joined2 $d -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined3
+  join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
+  join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
+  grep '^Peptide' joined5 > combined
+  grep -v '^Peptide' joined5 >> combined
+  """
+
+  else
   """
   for fn in $a $b $c $d $e $f $g; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
   join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
