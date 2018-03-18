@@ -35,7 +35,6 @@ dbsnp = file(params.dbsnp)
 cosmic = file(params.cosmic)
 genomefa = file(params.genome)
 tdb = file(params.tdb)
-ddb = file(params.ddb)
 
 activations = [hcd:'High-energy collision-induced dissociation', cid:'Collision-induced dissociation', etd:'Electron transfer dissociation']
 activationtype = activations[params.activation]
@@ -50,31 +49,50 @@ Channel
   .count()
   .set{ amount_mzml }
 
-Channel
-  .from(['target', file(params.tdb)], ['decoy', file(params.ddb)])
-  .set { predbs }
 
 process concatFasta {
  
   container 'ubuntu:latest'
 
   input:
-  set val(td), file(vardb) from predbs
+  file tdb
   file knownproteins
 
   output:
-  set val(td), file('db.fa') into dbs
+  set val('target'), file('db.fa') into fulltdb
+  file('db.fa') into prereverse
 
   script:
-  if(td == "target")
   """
-  cat $vardb $knownproteins > db.fa
-  """
-  else
-  """
-  cat $vardb > db.fa
+  cat $tdb $knownproteins > db.fa
   """
 }
+
+
+process makeDecoyReverseDB {
+  container 'biopython/biopython'
+
+  input:
+  file db from prereverse
+
+  output:
+  set val('decoy'), file('ddb.fasta') into fulldecoy
+
+  """
+  #!/usr/bin/env python3
+  from Bio import SeqIO
+  with open('$db') as fp, open('ddb.fasta', 'w') as wfp:
+    for decoy in (x[::-1] for x in SeqIO.parse(fp, 'fasta')):
+      decoy.description = decoy.description.replace('ENS', 'decoy_ENS')
+      decoy.id = 'decoy_{}'.format(decoy.id)
+      SeqIO.write(decoy, wfp, 'fasta')
+  
+  """
+}
+
+fulltdb
+  .concat(fulldecoy)
+  .set { dbs }
 
 
 Channel

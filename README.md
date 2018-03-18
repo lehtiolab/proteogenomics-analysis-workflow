@@ -22,9 +22,9 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
   + __Optional__: BAM and BAI files (in same directory) from RNASeq experiment
   
     `--bamfiles /path/to/\*.bam  # mind the backslash`
-  + Target, decoy FASTA and GTF of VarDB
+  + FASTA and GTF of VarDB
 
-    `--tdb /path/to/vardb.fa --ddb /path/to/decoy_vardb.fa --gtf /path/tovardb.gtf`
+    `--tdb /path/to/vardb.fa --gtf /path/tovardb.gtf`
 
   + Canonical protein FASTA for catching canonical proteins and BLAST
     `--knownproteins /path/to/Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa`
@@ -90,7 +90,7 @@ tar xvfz CosmicMutantExport.tsv.gz
 ### Analyse your mzML files
 
 ```
-nextflow run ipaw.nf --tdb /path/to/VarDB.fasta --ddb /path/to/decoy_VarDB.fasta \ 
+nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \ 
   --mzmls /path/to/\*.mzML --gtf /path/to/VarDB.gtf \
   --knownproteins /path/to/UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta \
   --snpfa /path/to/MSCanProVar_ensemblV79.filtered.fasta \
