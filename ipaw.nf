@@ -819,6 +819,10 @@ process parseAnnovarOut {
   """
 }
 
+scannedbams
+  .ifEmpty('No bams')
+  .set { bamsOrEmpty }
+
 process combineResults{
   
   container 'pgpython'
@@ -830,7 +834,7 @@ process combineResults{
   file d from annovar_parsed
   file e from phastcons_out
   file f from phylocsf_out
-  file g from scannedbams
+  file g from bamsOrEmpty
   
   output:
   file 'combined' into combined_novelpep_output
