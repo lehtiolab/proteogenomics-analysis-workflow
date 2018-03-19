@@ -269,8 +269,8 @@ process filterPercolator {
   file knownproteins
 
   output:
-  file('fp_th0.xml') into t_var_filtered_perco
-  file('fp_th1.xml') into t_nov_filtered_perco
+  file('fp_th0.xml') into t_nov_filtered_perco
+  file('fp_th1.xml') into t_var_filtered_perco
   file('perco.xml_decoy.xml_h0.xml') into d_nov_filtered_perco
   file('perco.xml_decoy.xml_h1.xml') into d_var_filtered_perco
   """
