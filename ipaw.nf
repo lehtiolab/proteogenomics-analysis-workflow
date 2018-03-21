@@ -11,6 +11,8 @@ Yafeng Zhu @yafeng
 
 https://github.com/lehtiolab/proteogenomics-analysis-workflow
 
+FIXME:
+ - make sure docker files are ok and in right place etc. Try them!
 */
 
 nf_required_version = '0.26.0'
@@ -59,8 +61,7 @@ process concatFasta {
   file knownproteins
 
   output:
-  set val('target'), file('db.fa') into fulltdb
-  file('db.fa') into prereverse
+  file('db.fa') into targetdb
 
   script:
   """
@@ -73,34 +74,29 @@ process makeDecoyReverseDB {
   container 'biopython/biopython'
 
   input:
-  file db from prereverse
+  file db from targetdb
 
   output:
-  set val('decoy'), file('ddb.fasta') into fulldecoy
+  file('concatdb.fasta') into concatdb
 
   """
   #!/usr/bin/env python3
   from Bio import SeqIO
-  with open('$db') as fp, open('ddb.fasta', 'w') as wfp:
-    for decoy in (x[::-1] for x in SeqIO.parse(fp, 'fasta')):
+  with open('$db') as fp, open('concatdb.fasta', 'w') as wfp:
+    for target in SeqIO.parse(fp, 'fasta'):
+      SeqIO.write(target, wfp, 'fasta')
+      decoy = target[::-1] 
       decoy.description = decoy.description.replace('ENS', 'decoy_ENS')
       decoy.id = 'decoy_{}'.format(decoy.id)
       SeqIO.write(decoy, wfp, 'fasta')
-  
   """
 }
-
-fulltdb
-  .concat(fulldecoy)
-  .set { dbs }
 
 
 Channel
   .fromPath(params.mzmls)
   .map { it -> [it.baseName.replaceFirst(/.*fr(\d\d).*/, "\$1").toInteger(), it.baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it] }
-  .tap { mzmlfiles; mzml_isobaric }
-  .combine(dbs)
-  .set { dbmzmls }
+  .into{ mzmlfiles; mzml_isobaric; mzml_msgf }
 
 mzmlfiles
   .buffer(size: amount_mzml.value)
@@ -202,12 +198,13 @@ process msgfPlus {
   container 'quay.io/biocontainers/msgf_plus:2016.10.26--py27_1'
 
   input:
-  set val(fraction), val(sample), file(x), val(td), file(db) from dbmzmls
+  set val(fraction), val(sample), file(x) from mzml_msgf
+  file(db) from concatdb
   file mods
 
   output:
-  set val(fraction), val(sample), file("${sample}.mzid"), val(td) into mzids
-  set val(td), val(sample), file('out.mzid.tsv') into mzidtsvs
+  set val(fraction), val(sample), file("${sample}.mzid") into mzids
+  set val(sample), file("${sample}.mzid"), file('out.mzid.tsv') into mzidtsvs
   
   """
   msgf_plus -Xmx16G -d $db -s $x -o "${sample}.mzid" -thread 12 -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
@@ -215,13 +212,17 @@ process msgfPlus {
   """
 }
 
-
-dmzids = Channel.create()
-tmzids = Channel.create()
 mzids
-  .map { it -> [fr:it[0], sample:it[1], fn:it[2], td:it[3]] }
+  .map { it -> [it[1], it[2]] }
   .tap { mzids_perco }
-  .choice(tmzids, dmzids) { it -> it['td'] == 'target' ? 0 : 1}
+  .buffer(size: amount_mzml.value)
+  .map { it.sort( {a, b -> a[0] <=> b[0]}) }
+  .map { it -> [it.collect() { it[0] }, it.collect() { it[1] }] }
+  .set { mzids_2pin }
+
+/*
+tmzids = Channel.create()
+dmzids = Channel.create()
 
 tmzids
   .buffer(size: amount_mzml.value)
@@ -235,6 +236,7 @@ dmzids
   .buffer(size: params.ppoolsize, remainder: true)
   .map { it -> [it.collect() { it['fn'] }, it.collect() { it['sample'] }] }
   .set { buffer_mzid_decoy }
+*/
 
 
 process percolator {
@@ -242,19 +244,17 @@ process percolator {
   container 'quay.io/biocontainers/percolator:3.1--boost_1.623'
 
   input:
-  set file('target?'), val(samples) from buffer_mzid_target
-  set file('decoy?'), val(samples) from buffer_mzid_decoy
+  set val(samples), file('mzid?') from mzids_2pin
 
   output:
   file('perco.xml') into percolated
 
   """
-  mkdir targets
-  mkdir decoys
-  count=1;for sam in ${samples.join(' ')}; do ln -s `pwd`/target\$count targets/\${sam}.mzid; echo targets/\${sam}.mzid >> targetmeta; ((count++));done
-  count=1;for sam in ${samples.join(' ')}; do ln -s `pwd`/decoy\$count decoys/\${sam}.mzid; echo decoys/\${sam}.mzid >> decoymeta; ((count++));done
-  msgf2pin -o percoin.xml -e trypsin targetmeta decoymeta
-  percolator -j percoin.xml -X perco.xml --decoy-xml-output -y
+  echo $samples
+  mkdir mzids
+  count=1;for sam in ${samples.join(' ')}; do ln -s `pwd`/mzid\$count mzids/\${sam}.mzid; echo mzids/\${sam}.mzid >> metafile; ((count++));done
+  msgf2pin -o percoin.xml -e trypsin -P "decoy_" metafile
+  percolator -j percoin.xml -X perco.xml -N 100000 --decoy-xml-output -y
   """
 }
 
@@ -269,280 +269,153 @@ process filterPercolator {
   file knownproteins
 
   output:
-  file('fp_th0.xml') into t_nov_filtered_perco
-  file('fp_th1.xml') into t_var_filtered_perco
-  file('perco.xml_decoy.xml_h0.xml') into d_nov_filtered_perco
-  file('perco.xml_decoy.xml_h1.xml') into d_var_filtered_perco
+  set val('novel'), file('fp_th0.xml') into var_filtered_perco
+  set val('variant'), file('fp_th1.xml') into nov_filtered_perco
   """
-  msspercolator splittd -i perco.xml 
-  msspercolator splitprotein -i perco.xml_target.xml --protheaders '^PGOHUM;^lnc' '^COSMIC;^CanProVar'
-  msspercolator splitprotein -i perco.xml_decoy.xml --protheaders '^decoy_PGOHUM;^decoy_lnc' '^decoy_COSMIC;^decoy_CanProVar'
-  msspercolator filterseq -i perco.xml_target.xml_h0.xml -o fs_th0.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
-  msspercolator filterseq -i perco.xml_target.xml_h1.xml -o fs_th1.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
+  msspercolator splitprotein -i perco.xml --protheaders '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc' '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
+  msspercolator filterseq -i perco.xml_h0.xml -o fs_th0.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
+  msspercolator filterseq -i perco.xml_h1.xml -o fs_th1.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
   msspercolator filterprot -i fs_th0.xml -o fp_th0.xml --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
   msspercolator filterprot -i fs_th1.xml -o fp_th1.xml --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
   """
 }
 
-/* Group batches */
-t_nov_filtered_perco
-  .collect()
-  .map { it -> ['target', 'novel', it] }
-  .set { t_novgrouped_perco }
+var_filtered_perco
+  .concat(nov_filtered_perco)
+  .set { filtered_perco }
 
-t_var_filtered_perco
-  .collect()
-  .map { it -> ['target', 'variant', it] }
-  .set { t_vargrouped_perco }
-
-d_nov_filtered_perco
-  .collect()
-  .map { it -> ['decoy', 'novel', it] }
-  .set { d_novgrouped_perco }
-
-d_var_filtered_perco
-  .collect()
-  .map { it -> ['decoy', 'variant', it] }
-  .set { d_vargrouped_perco }
-
-t_novgrouped_perco
-  .mix(t_vargrouped_perco, d_novgrouped_perco, d_vargrouped_perco)
-  .set { perco_pre_merge }
-  
-
-process percolatorMergeBatches {
-
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-
-  input:
-  set val(td), val(peptype), file('group?') from perco_pre_merge
-
-  output:
-  set val(td), val(peptype), file('filtered.xml') into perco_merged
-  
-  """
-  msspercolator merge -i group* -o merged.xml
-  msspercolator filteruni -i merged.xml -o filtered.xml --score svm
-  """
-}
-
-perco_t_merged = Channel.create()
-perco_d_merged = Channel.create()
-
-perco_merged
-  .choice(perco_t_merged, perco_d_merged) { it -> it[0] == 'target' ? 0 : 1}
-
-perco_t_merged
-  .groupTuple(by: [0,1])
-  .buffer(size: 2) /* buffer novel and variant */
-  .flatMap { it.sort( {a, b -> a[1] <=> b[1]}) }
-  .map{ it -> [it[1], it[2][0]] }
-  .set { perco_t_merged_sorted }
-perco_d_merged
-  .groupTuple(by: [0,1])
-  .buffer(size: 2) /* buffer novel and variant */
-  .flatMap { it.sort( {a, b -> a[1] <=> b[1]}) }
-  .map{ it -> [it[1], it[2][0]] }
-  .set { perco_d_merged_sorted }
-
-process getQvalityInput {
-
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-
-  input:
-  set val(peptype), file('target') from perco_t_merged_sorted
-  set val(peptype), file('decoy') from perco_d_merged_sorted
-
-  output:
-  set val(peptype), file('tqpsm.txt'), file('dqpsm.txt'), file('tqpep.txt'), file('dqpep.txt'), file('target'), file('decoy') into qvality_input
-
-  """
-  msspercolator qvality -i target --decoyfn decoy --feattype psm -o psmqvality.txt || true
-  mv target_qvality_input.txt tqpsm.txt
-  mv decoy_qvality_input.txt dqpsm.txt
-  msspercolator qvality -i target --decoyfn decoy --feattype peptide -o pepqvality.txt || true
-  mv target_qvality_input.txt tqpep.txt
-  mv decoy_qvality_input.txt dqpep.txt
-  """
-}
-
-process qvalityMergedBatches {
-
-  container 'quay.io/biocontainers/percolator:3.1--boost_1.623'
-
-  input:
-  set val(peptype), file('tqpsm'), file('dqpsm'), file('tqpep'), file('dqpep'), file('targetperco'), file('decoyperco') from qvality_input
- 
-  output:
-  set val(peptype), file('qpsm.out'), file('qpep.out'), file('targetperco'), file('decoyperco') into qvality_output
-  """
-  qvality tqpsm dqpsm -o qpsm.out
-  qvality tqpep dqpep -o qpep.out
-  """ 
-}
-  
-process recalculatePercolator {
-
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-
-  input:
-  set val(peptype), file('qpsm'), file('qpep'), file('targetperco'), file('decoyperco') from qvality_output
-
-  output:
-  set val(peptype), file('trecalperco.xml'), file('drecalperco.xml') into recal_perco 
-
-  """
-  msspercolator reassign -i targetperco --qvality qpsm --feattype psm -o rec_tpsm
-  msspercolator reassign -i rec_tpsm --qvality qpep --feattype peptide -o trecalperco.xml
-  msspercolator reassign -i decoyperco --qvality qpsm --feattype psm -o rec_dpsm
-  msspercolator reassign -i rec_dpsm --qvality qpep --feattype peptide -o drecalperco.xml
-  """
-}
-
-
-recal_perco
-  .buffer(size: 2)
-  .flatMap { it.sort( {a, b -> a[0] <=> b[0] }) }
-  .into { trecalperco; drecalperco }
-trecalperco
-  .map { it -> [it[0], it[1]] }
-  .set { tpout_perco }
-drecalperco
-  .map { it -> [it[0], it[2]] }
-  .set { dpout_perco }
-
-mzids_perco
-  .map { it -> [it.td, it.fn] }
-  .groupTuple()
-  .buffer(size: 2)
-  .flatMap { it.sort( {a, b -> a[0] <=> b[0]}) }
-  .into { novmzids; varmzids }
-tpercomzids = Channel.create()
-dpercomzids = Channel.create()
-novmzids
-  .concat(varmzids)
-  .choice(tpercomzids, dpercomzids) { it -> it[0] == 'target' ? 0 : 1}
-
-
-process poutToMzidTarget {
-
-  container 'quay.io/biocontainers/pout2mzid:0.3.03--boost1.62_2'
-
-  input:
-  set val(peptype), file('perco') from tpout_perco
-  set val(td), file(mzids) from tpercomzids
- 
-  output:
-  set val(peptype), file('p2mzid/*.mzid') into tpmzid
-  
-  """
-  ls *.mzid > infiles.txt
-  pout2mzid -p perco -i . -f infiles.txt -o p2mzid -c _perco -v
-  """
-}
-
-
-process poutToMzidDecoy {
-
-  container 'quay.io/biocontainers/pout2mzid:0.3.03--boost1.62_2'
-
-  input:
-  set val(peptype), file('perco') from dpout_perco
-  set val(td), file(mzids) from dpercomzids
- 
-  output:
-  set val(peptype), file('p2mzid/*.mzid') into dpmzid
-  
-  """
-  ls *.mzid > infiles.txt
-  pout2mzid -p perco -i . -f infiles.txt -o p2mzid -c _perco -v -d
-  """
-}
-
-
-varmzidp = Channel.create()
-novmzidp = Channel.create()
-/* sort mzidtsvs decoy/target, samplename */
+  //set val(sample), (file('out.mzid.tsv') into mzidtsvs
 mzidtsvs
-  .buffer(size: amount_mzml.value * 2)
-  .flatMap { it.sort( {a, b -> a[0] <=> b[0] ?: a[1] <=> b[1]}) }
-  .set { sortedtsvs }
-
-tpmzid
-  .map { it -> it[1] instanceof List ? it : [it[0], [it[1]]] }
-  .transpose()
-  .set { flat_tpmzid }
-dpmzid
-  .map { it -> it[1] instanceof List ? it : [it[0], [it[1]]] }
-  .transpose()
-  .concat(flat_tpmzid)
-  .choice(varmzidp, novmzidp) { it -> it[0] == 'variant' ? 0 : 1}
+  .buffer(size: amount_mzml.value)
+  .map { it -> [it.collect() { it[1] }, it.collect() { it[2] }] }
+  .combine(filtered_perco)
+  .set { allmzidtsv }
 
 
+process svmToTSV {
 
-process annotateMzidTSVPercolator {
-  
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-  
-  input:
-  set val(vartype), file('varmzid') from varmzidp
-  set val(novtype), file('novmzid') from novmzidp
-  set val(td), val(sample), file(psms) from sortedtsvs
-  
-  output:
-  set val(td), file("${sample}.txt") into psmsperco
 
+  input:
+  set file('mzident?'), file('mzidtsv?'), val(peptype), file(perco) from allmzidtsv
+
+  output:
+  set val(peptype), file('mzidperco') into mzidtsv_perco
+
+  script:
   """
-  cp $psms varpsms
-  msspsmtable percolator -i $psms -o novperco --mzid novmzid
-  msspsmtable percolator -i varpsms -o varperco --mzid varmzid
-  cat novperco <( tail -n+2 varperco) > ${sample}.txt 
+#!/usr/bin/env python
+from glob import glob
+mzidtsvfns = sorted(glob('mzidtsv*'))
+mzidfns = sorted(glob('mzident*'))
+from app.readers import pycolator, xml, tsv, mzidplus
+import os
+ns = xml.get_namespace_from_top('$perco', None) 
+psms = {p.attrib['{%s}psm_id' % ns['xmlns']]: p for p in pycolator.generate_psms('$perco', ns)}
+decoys = {True: 0, False: 0}
+for psm in sorted([(pid, p.find('{%s}svm_score' % ns['xmlns']).text, p) for pid, p in psms.items()], reverse=True, key=lambda x:x[1]):
+    pdecoy = psm[2].attrib['{%s}decoy' % ns['xmlns']] == 'true'
+    decoys[pdecoy] += 1
+    # FIXME is this correct Yafeng?
+    # FIXME automatic float?
+    psms[psm[0]] = {'decoy': pdecoy, 'svm': psm[1], 'qval': decoys[True]/decoys[False]}  # T-TDC
+decoys = {'true': 0, 'false': 0}
+ # FIXME automatic float?
+for svm, pep in sorted([(x.find('{%s}svm_score' % ns['xmlns']).text, x) for x in pycolator.generate_peptides('$perco', ns)], reverse=True, key=lambda x:x[0]):
+    decoys[pep.attrib['{%s}decoy' % ns['xmlns']]] += 1
+    [psms[pid.text].update({'pepqval': decoys['true']/decoys['false']}) for pid in pep.find('{%s}psm_ids' % ns['xmlns'])]
+oldheader = tsv.get_tsv_header(mzidtsvfns[0])
+header = oldheader + ['percolator svm-score', 'PSM q-value', 'peptide q-value']
+with open('mzidperco', 'w') as fp:
+    fp.write('\\t'.join(header))
+    for fnix, mzidfn in enumerate(mzidfns):
+        mzns = mzidplus.get_mzid_namespace(mzidfn)
+        siis = (sii for sir in mzidplus.mzid_spec_result_generator(mzidfn, mzns) for sii in sir.findall('{%s}SpectrumIdentificationItem' % mzns['xmlns']))
+        for specidi, psm in zip(siis, tsv.generate_tsv_psms(mzidtsvfns[fnix], oldheader)):
+            # percolator psm ID is: samplename_SII_scannr_rank_scannr_charge_rank
+            print(specidi)
+            print(psm)
+            scan, rank = specidi.attrib['id'].replace('SII_', '').split('_')
+            outpsm = {k: v for k,v in psm.items()}
+            spfile = os.path.splitext(psm['#SpecFile'])[0]
+            try:
+                percopsm = psms['{fn}_SII_{sc}_{rk}_{sc}_{ch}_{rk}'.format(fn=spfile, sc=scan, rk=rank, ch=psm['Charge'])]
+            except KeyError:
+                continue
+            if percopsm['decoy']:
+                continue
+            fp.write('\\n')
+            outpsm.update({'percolator svm-score': percopsm['svm'], 'PSM q-value': percopsm['qval'], 'peptide q-value': percopsm['pepqval']})
+            fp.write('\\t'.join([str(outpsm[k]) for k in header]))
   """
 }
-
-psmsperco
-  .filter { it[0] == 'target' }
-  .map { it -> it[1] }
-  .collect()
-  .set { prepsmtable }
 
 process createPSMPeptideTable {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
   
-  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "psmtable.txt" ? "psmtable.txt" : null }
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
-  file 'psms' from prepsmtable
+  set val(peptype), file('psms') from mzidtsv_perco
   file 'lookup' from spec_lookup
 
   output:
-  file 'psmtable.txt' into psmtable
-  file 'peptide_table.txt' into prepeptable
+  set val(peptype), file("${peptype}_psmtable.txt") into psmtable
 
   script:
   if(params.isobaric)
   """
-  msspsmtable merge -o psms.txt -i psms*
-  msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
+  msspsmtable conffilt -i psms -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
   msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
   msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt
-  msspsmtable quant -i prepsms.txt -o psmtable.txt --dbfile psmlookup --isobaric
-  sed 's/\\#SpecFile/SpectraFile/' -i psmtable.txt
-  msspeptable psm2pep -i psmtable.txt -o peptide_table.txt --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
+  msspsmtable quant -i prepsms.txt -o ${peptype}_psmtable.txt --dbfile psmlookup --isobaric
+  sed 's/\\#SpecFile/SpectraFile/' -i ${peptype}_psmtable.txt
   """
   else
   """
-  msspsmtable merge -o psms.txt -i psms*
-  msspsmtable conffilt -i psms.txt -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
+  msspsmtable conffilt -i psms -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
   msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
-  msspsmtable specdata -i filtpep --dbfile psmlookup -o psmtable.txt
-  sed 's/\\#SpecFile/SpectraFile/' -i psmtable.txt
-  msspeptable psm2pep -i psmtable.txt -o peptide_table.txt --scorecolpattern svm --spectracol 1
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o ${peptype}_psmtable.txt
+  sed 's/\\#SpecFile/SpectraFile/' -i ${peptype}_psmtable.txt
+  """
+}
+
+variantpsms = Channel.create()
+novelpsms = Channel.create()
+psmtable
+  .tap { both_psmtables }
+  .choice( variantpsms, novelpsms ) { it -> it[0] == 'variant' ? 0 : 1 }
+ both_psmtables
+  .map { it -> it[1] }
+  .collect()
+  .set { psms_prepep }
+
+ 
+process prePeptideTable {
+
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+  
+  input:
+  file('psms?') from psms_prepep
+
+  output:
+  file('prepeptidetable.txt') into prepeptable
+
+  script:
+  if(params.isobaric)
+  """
+  msspsmtable merge -o psms.txt -i psms* 
+  msspeptable psm2pep -i psms.txt -o prepeptidetable.txt --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
+  """
+  else
+  """
+  msspsmtable merge -o psms.txt -i psms* 
+  msspeptable psm2pep -i psms.txt -o prepeptidetable.txt --scorecolpattern svm --spectracol 1
   """
 }
 
@@ -563,26 +436,8 @@ process createPeptideTable{
 }
 
 
-process PSMTableNovelVariant {
-  
-  container 'ubuntu:latest'
-
-  input:
-  file x from psmtable
-  
-  output:
-  file 'variantpsms' into variantpsms
-  file 'novelpsms' into novelpsms
-
-  """
-  head -n 1 $x > variantpsms
-  head -n 1 $x > novelpsms
-  egrep '(PGOHUM|lnc)' $x >> novelpsms
-  egrep '(COSMIC|CanProVar)' $x >> variantpsms
-  """
-}
-
 novelpsms
+  .map { it -> it[1] }
   .into{novelpsmsFastaBedGFF; novelpsms_specai}
 
 
@@ -842,7 +697,7 @@ process combineResults{
   script:
   if (!params.bamfiles)
   """
-  for fn in $a $b $c $d $e $f $g; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
+  for fn in $a $b $c $d $e $f; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
   join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
   join joined1 $c -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined2
   join joined2 $d -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined3
@@ -890,15 +745,13 @@ process prepSpectrumAI {
   container 'pgpython'
   
   input:
-  file x from variantpsms
+  set val(peptype), file(x) from variantpsms
   
   output:
   file 'specai_in.txt' into specai_input
   
   """
-  head -n 1 $x > variantpsms.txt
-  egrep '(COSMIC|CanProVar)' $x >> variantpsms.txt
-  python3 /pgpython/label_sub_pos.py --input_psm variantpsms.txt --output specai_in.txt
+  python3 /pgpython/label_sub_pos.py --input_psm $x --output specai_in.txt
   """
 }
 
