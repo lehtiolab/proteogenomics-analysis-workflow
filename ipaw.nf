@@ -313,15 +313,12 @@ import os
 ns = xml.get_namespace_from_top('$perco', None) 
 psms = {p.attrib['{%s}psm_id' % ns['xmlns']]: p for p in pycolator.generate_psms('$perco', ns)}
 decoys = {True: 0, False: 0}
-for psm in sorted([(pid, p.find('{%s}svm_score' % ns['xmlns']).text, p) for pid, p in psms.items()], reverse=True, key=lambda x:x[1]):
+for psm in sorted([(pid, float(p.find('{%s}svm_score' % ns['xmlns']).text), p) for pid, p in psms.items()], reverse=True, key=lambda x:x[1]):
     pdecoy = psm[2].attrib['{%s}decoy' % ns['xmlns']] == 'true'
     decoys[pdecoy] += 1
-    # FIXME is this correct Yafeng?
-    # FIXME automatic float?
     psms[psm[0]] = {'decoy': pdecoy, 'svm': psm[1], 'qval': decoys[True]/decoys[False]}  # T-TDC
 decoys = {'true': 0, 'false': 0}
- # FIXME automatic float?
-for svm, pep in sorted([(x.find('{%s}svm_score' % ns['xmlns']).text, x) for x in pycolator.generate_peptides('$perco', ns)], reverse=True, key=lambda x:x[0]):
+for svm, pep in sorted([(float(x.find('{%s}svm_score' % ns['xmlns']).text), x) for x in pycolator.generate_peptides('$perco', ns)], reverse=True, key=lambda x:x[0]):
     decoys[pep.attrib['{%s}decoy' % ns['xmlns']]] += 1
     [psms[pid.text].update({'pepqval': decoys['true']/decoys['false']}) for pid in pep.find('{%s}psm_ids' % ns['xmlns'])]
 oldheader = tsv.get_tsv_header(mzidtsvfns[0])
