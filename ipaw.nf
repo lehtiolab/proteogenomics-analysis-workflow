@@ -442,22 +442,24 @@ novelpsms
 
 
 process createFastaBedGFF {
- container 'pgpython'
-
- input:
- file novelpsmsFastaBedGFF
- file gtffile
- file tdb
-
- output:
- file 'novel_peptides.fa' into novelfasta
- file 'novel_peptides.bed' into novelbed
- file 'novel_peptides.gff3' into novelGFF3
- file 'novel_peptides.tab.txt' into novelpep
-
- """
- python3 /pgpython/map_novelpeptide2genome.py --input $novelpsmsFastaBedGFF --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
- """
+  container 'pgpython'
+ 
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "novel_peptides.gff3" ? "novel_peptides.gff3" : null}
+ 
+  input:
+  file novelpsmsFastaBedGFF
+  file gtffile
+  file tdb
+ 
+  output:
+  file 'novel_peptides.fa' into novelfasta
+  file 'novel_peptides.bed' into novelbed
+  file 'novel_peptides.gff3' into novelGFF3
+  file 'novel_peptides.tab.txt' into novelpep
+ 
+  """
+  python3 /pgpython/map_novelpeptide2genome.py --input $novelpsmsFastaBedGFF --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
+  """
 }
 
 novelpep
