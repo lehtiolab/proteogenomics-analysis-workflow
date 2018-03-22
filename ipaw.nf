@@ -24,7 +24,6 @@ if( ! nextflow.version.matches(">= ${nf_required_version}") ){
 
 /* SET DEFAULT PARAMS */
 mods = file('Mods.txt')
-params.ppoolsize = 8
 params.isobaric = false
 params.activation = 'hcd'
 params.bamfiles = false
@@ -219,24 +218,6 @@ mzids
   .map { it.sort( {a, b -> a[0] <=> b[0]}) }
   .map { it -> [it.collect() { it[0] }, it.collect() { it[1] }] }
   .set { mzids_2pin }
-
-/*
-tmzids = Channel.create()
-dmzids = Channel.create()
-
-tmzids
-  .buffer(size: amount_mzml.value)
-  .flatMap { it.sort( {a, b -> a['sample'] <=> b['sample']}) }
-  .buffer(size: params.ppoolsize, remainder: true) 
-  .map { it -> [it.collect() { it['fn'] }, it.collect() { it['sample'] }] }
-  .set { buffer_mzid_target }
-dmzids
-  .buffer(size: amount_mzml.value)
-  .flatMap { it.sort({a, b -> a['sample'] <=> b['sample'] }) }
-  .buffer(size: params.ppoolsize, remainder: true)
-  .map { it -> [it.collect() { it['fn'] }, it.collect() { it['sample'] }] }
-  .set { buffer_mzid_decoy }
-*/
 
 
 process percolator {
