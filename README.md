@@ -27,7 +27,8 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
     `--tdb /path/to/vardb.fa --gtf /path/tovardb.gtf`
 
   + Canonical protein FASTA for catching canonical proteins and BLAST
-    `--knownproteins /path/to/Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa`
+    `--blastdb /path/to/Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa`
+    `--knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa`
 
   + SNP and COSMIC databases
 
@@ -37,11 +38,6 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
   + Genome Masked FASTA to BLAT against
 
     `--genome /path/to/hg19.fa.masked`
-  + Percolator pool size (fractionated data can be batched before percolator, this 
-    specifies the amount of fractions in a batch. Batches will be merged and
-    FDR re-evaluated after percolator
-
-    `--ppoolsize 8  # default`
   + Isobaric quantification type used and activation (leave out for no isobaric quant)
 
     ```
@@ -78,6 +74,10 @@ wget hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/chromFaMasked.tar.gz
 tar xvfz chromFaMasked.gz
 for chr in {1..22} X Y M; do cat chr$chr.fa.masked >> hg19.chr1-22.X.Y.M.fa.masked; done
 
+# Download ENSEMBL database
+wget ftp://ftp.ensembl.org/pub/release-91/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz
+gunzip Homo_sapiens.GRCh38.pep.all.fa.gz
+
 # Get the COSMIC database
 sftp 'your_email_address@example.com'@sftp-cancer.sanger.ac.uk
 # Download the data (NB version 71 currently works with the mapping script)
@@ -92,7 +92,8 @@ tar xvfz CosmicMutantExport.tsv.gz
 ```
 nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \ 
   --mzmls /path/to/\*.mzML --gtf /path/to/VarDB.gtf \
-  --knownproteins /path/to/UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta \
+  --knownproteins /path/to/ftp://ftp.ensembl.org/pub/release-91/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz
+  --blastdb /path/to/UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta \
   --snpfa /path/to/MSCanProVar_ensemblV79.filtered.fasta \
   --genome /path/to/hg19.chr1-22.X.Y.M.fa.masked \
   --dbsnp /path/to/snp142CodingDbSnp.txt
