@@ -80,8 +80,8 @@ for chr in {1..22} X Y M; do cat chr$chr.fa.masked >> hg19.chr1-22.X.Y.M.fa.mask
 
 # Get the COSMIC database
 sftp 'your_email_address@example.com'@sftp-cancer.sanger.ac.uk
-# Download the data (NB you may want to download other versions)
-sftp> get cosmic/grch37/cosmic/v75/CosmicMutantExport.tsv.gz
+# Download the data (NB version 71 currently works with the mapping script)
+sftp> get cosmic/grch37/cosmic/v71/CosmicMutantExport.tsv.gz
 sftp> exit
 # Extract COSMIC data
 tar xvfz CosmicMutantExport.tsv.gz
