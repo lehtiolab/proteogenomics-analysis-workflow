@@ -254,7 +254,7 @@ process percolator {
   mkdir mzids
   count=1;for sam in ${samples.join(' ')}; do ln -s `pwd`/mzid\$count mzids/\${sam}.mzid; echo mzids/\${sam}.mzid >> metafile; ((count++));done
   msgf2pin -o percoin.xml -e trypsin -P "decoy_" metafile
-  percolator -j percoin.xml -X perco.xml -N 100000 --decoy-xml-output -y
+  percolator -j percoin.xml -X perco.xml -N 500000 --decoy-xml-output -y
   """
 }
 
