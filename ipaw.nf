@@ -27,6 +27,7 @@ mods = file('Mods.txt')
 params.isobaric = false
 params.activation = 'hcd'
 params.bamfiles = false
+params.outdir = 'result'
 
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
