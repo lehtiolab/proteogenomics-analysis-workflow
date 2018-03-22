@@ -4,8 +4,6 @@ MAINTAINER Lehtio Lab
 RUN apt-get update
 RUN apt-get install -y python3-pip python3-dev libcurl3-dev
 RUN pip3 install pyBigWig pysam
-RUN git clone https://github.com/yafeng/proteogenomics_python /pgpython
-RUN cd /pgpython && git pull && git reset --hard 32d55d3e9a906901f06c6f8e732857222cad1789
 
 ADD http://hgdownload.cse.ucsc.edu/goldenPath/hg19/phastCons100way/hg19.100way.phastCons.bw /bigwigs/
 ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF+0.bw /bigwigs/
@@ -15,3 +13,5 @@ ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF
 ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-1.bw /bigwigs/
 ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-2.bw /bigwigs/
 
+RUN git clone https://github.com/yafeng/proteogenomics_python /pgpython
+RUN cd /pgpython && git pull && git reset --hard 141410669f987497aabefa9b669fcf868401a544
