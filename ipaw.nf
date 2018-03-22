@@ -485,17 +485,20 @@ process ParseBlastpOut {
 process ValidateSingleMismatchNovpeps {
   container 'spectrumai'
   
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "precursorError.histogram.plot.pdf" ? "novel_precursorError_plot.pdf" : it }
+  
   input:
   file x from novpeps_singlemis
   file mzml from singlemismatch_nov_mzmls
 
   output:
-  file 'singlemis_specai.txt' into singlemis_specai
+  file 'novel_saav_specai.txt' into singlemis_specai
+  file 'precursorError.histogram.plot.pdf' into novel_specai_plot
 
   """
   mkdir mzmls
   for fn in $mzml; do ln -s `pwd`/\$fn mzmls/; done
-  Rscript /SpectrumAI/SpectrumAI.R mzmls $x singlemis_specai.txt || cp $x singlemis_specai.txt
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $x novel_saav_specai.txt || cp $x singlemis_specai.txt
   """
 }
 
@@ -739,22 +742,26 @@ process prepSpectrumAI {
 process SpectrumAI {
   container 'spectrumai'
 
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "precursorError.histogram.plot.pdf" ? "variant_precursorError_plot.pdf" : it }
+
   input:
   file specai_in from specai_input
   file x from specaimzmls
 
-  output: file 'specairesult.txt' into specai
+  output:
+  file 'variant_specairesult.txt' into specai
+  file 'precursorError.histogram.plot.pdf' into specai_plot
 
   """
   mkdir mzmls
   for fn in $x; do ln -s `pwd`/\$fn mzmls/; done
   ls mzmls
-  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in specairesult.txt
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in variant_specairesult.txt
   """
 }
 
 
-process SpectrumAIOutParse {
+process mapVariantPeptidesToGenome {
 
   container 'pgpython'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
