@@ -3,8 +3,9 @@ Integrated proteogenomics analysis workflow
 
 This is a workflow to identify, curate, and validate variant and novel peptides from MS proteomics spectra data, using the VarDB database. VarDB combines entries from COSMIC, PGOHUM, CanProVar and lncipedia. The pipeline takes mzML spectra files as input. The workflow is powered by [Nextflow](https://nextflow.io) and runs in [Docker](https://docker.com) containers.
 
-Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threads (adjust as you see fit) on a separate target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation.
+Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threads (adjust as you see fit) on a concatenated target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation.
 
+![workflow image](https://github.com/lehtiolab/proteogenomics-analysis-workflow/blob/master/images/workflow.png)
 
 ### Requirements
 
@@ -50,7 +51,7 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
 
   + Create account at [sanger](http://cancer.sanger.ac.uk/cosmic/help/download) for COSMIC database
   + [Register](http://annovar.openbioinformatics.org/en/latest) for download of annovar
-  + Download SNP data from the [UCSC table browser](https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=654845801_AIfwaTHVOpBosVlaTdk1QGgcQYrZ&clade=mammal&org=Human&db=hg38&hgta_group=varRep&hgta_track=snp142Common&hgta_table=snp142CodingDbSnp&hgta_regionType=genome&position=chr1%3A11102837-11267747&hgta_outputType=primaryTable&hgta_outFileName=snp142CodingDbSnp.txt)
+  + Download SNP data from the [UCSC table browser](https://genome.ucsc.edu/cgi-bin/hgTables?hgsid=661199271_5BEJQ6aAEOgRhkgNqBRFQQhTW05G&clade=mammal&org=&db=hg19&hgta_group=varRep&hgta_track=snp142Common&hgta_table=snp142CodingDbSnp&hgta_regionType=genome&position=&hgta_outputType=primaryTable&hgta_outFileName=snp142CodingDbSnp.txt)
   
 ```
 # Get this repo
@@ -97,5 +98,6 @@ nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \
   --snpfa /path/to/MSCanProVar_ensemblV79.filtered.fasta \
   --genome /path/to/hg19.chr1-22.X.Y.M.fa.masked \
   --dbsnp /path/to/snp142CodingDbSnp.txt
-  --bamfiles /path/to/\*.bam --isobaric tmt10plex
+  --bamfiles /path/to/\*.bam --isobaric tmt10plex \
+  --outdir /path/to/results
 ```
