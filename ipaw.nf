@@ -24,10 +24,10 @@ if( ! nextflow.version.matches(">= ${nf_required_version}") ){
 
 /* SET DEFAULT PARAMS */
 mods = file('Mods.txt')
-params.ppoolsize = 8
 params.isobaric = false
 params.activation = 'hcd'
 params.bamfiles = false
+params.outdir = 'result'
 
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
@@ -46,11 +46,36 @@ massshift = massshifts[plextype]
 msgfprotocol = [tmt:4, itraq:2, false:0][plextype]
 
 /* PIPELINE START */
+
+// Either feed an mzmldef file (tab separated lines with filepath\tsetname), or /path/to/\*.mzML
+if (!params.mzmldef) {
 Channel
   .fromPath(params.mzmls)
+  .map { it -> [it, 'NA'] }
+  .set { mzml_in }
+} else {
+Channel
+  .from(file("${params.mzmldef}").readLines())
+  .map { it -> it.tokenize('\t') }
+  .set { mzml_in }
+}
+
+mzml_in
+  .tap { sets }
+  .map { it -> [file(it[0]), it[1]]}
+  .map { it -> [it[1], it[0].baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it[0]] }
+  .tap{ mzmlfiles; mzml_isobaric; mzml_msgf }
   .count()
   .set{ amount_mzml }
 
+sets
+  .map{ it -> it[1] }
+  .unique()
+  .tap { sets_for_emtpybam }
+  .collect()
+  .subscribe { println "Detected setnames: ${it.join(', ')}" }
+
+// FIXME can we get rid of amount_mzml should be per set I guess and probably deleted!
 
 process concatFasta {
  
@@ -93,19 +118,6 @@ process makeDecoyReverseDB {
 }
 
 
-Channel
-  .fromPath(params.mzmls)
-  .map { it -> [it.baseName.replaceFirst(/.*fr(\d\d).*/, "\$1").toInteger(), it.baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it] }
-  .into{ mzmlfiles; mzml_isobaric; mzml_msgf }
-
-mzmlfiles
-  .buffer(size: amount_mzml.value)
-  .flatMap { it.sort( {a, b -> a[1] <=> b[1]}) }
-  .map { it -> it[2] }
-  .collect()
-  .into { mzmlfiles_all; specaimzmls; singlemismatch_nov_mzmls }
-
-
 process makeProtSeq {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
@@ -144,7 +156,7 @@ process IsobaricQuant {
   when: params.isobaric
 
   input:
-  set val(fr), val(sample), file(infile) from mzml_isobaric
+  set val(setname), val(sample), file(infile) from mzml_isobaric
 
   output:
   set val(sample), file("${infile}.consensusXML") into isobaricxml
@@ -165,46 +177,54 @@ isobaricxml
   .set { sorted_isoxml }
 
 
+mzmlfiles
+  .tap { groupset_mzmls }
+  .buffer(size: amount_mzml.value)
+  .map { it.sort( {a, b -> a[1] <=> b[1]}) }
+  .map { it -> [it.collect() { it[0] }, it.collect() { it[2] }] }
+  .set{ mzmlfiles_all }
+
+
 process createSpectraLookup {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
   file(isobxmls) from sorted_isoxml 
-  file(mzmlfiles) from mzmlfiles_all
+  set val(setnames), file(mzmlfiles) from mzmlfiles_all
   
   output:
-  file 'mslookup_db.sqlite' into spec_lookup
+  file('mslookup_db.sqlite') into spec_lookup
 
   script:
   if(params.isobaric)
   """
-  msslookup spectra -i ${mzmlfiles.join(' ')} --setnames  ${['setA'].multiply(amount_mzml.value).join(' ')}
+  msslookup spectra -i ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
   msslookup isoquant --dbfile mslookup_db.sqlite -i ${isobxmls.join(' ')} --spectra ${mzmlfiles.join(' ')}
   """
   else
   """
-  msslookup spectra -i ${mzmlfiles_all.join(' ')} --setnames  ${['setA'].multiply(amount_mzml.value).join(' ')}
+  msslookup spectra -i ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
   """
 }
 
 
 process msgfPlus {
 
-  /* Latest version has problems when converting to TSV, possible too long identifiers 
-     So we use an older version
-     LATEST TESTED: container 'quay.io/biocontainers/msgf_plus:2017.07.21--py27_0'
-  */
+  // Latest version has problems when converting to TSV, possible too long identifiers 
+  // So we use an older version
+  // LATEST TESTED: container 'quay.io/biocontainers/msgf_plus:2017.07.21--py27_0'
+
   container 'quay.io/biocontainers/msgf_plus:2016.10.26--py27_1'
 
   input:
-  set val(fraction), val(sample), file(x) from mzml_msgf
+  set val(setname), val(sample), file(x) from mzml_msgf
   file(db) from concatdb
   file mods
 
   output:
-  set val(fraction), val(sample), file("${sample}.mzid") into mzids
-  set val(sample), file("${sample}.mzid"), file('out.mzid.tsv') into mzidtsvs
+  set val(setname), val(sample), file("${sample}.mzid") into mzids
+  set val(setname), file("${sample}.mzid"), file('out.mzid.tsv') into mzidtsvs
   
   """
   msgf_plus -Xmx16G -d $db -s $x -o "${sample}.mzid" -thread 12 -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
@@ -213,30 +233,8 @@ process msgfPlus {
 }
 
 mzids
-  .map { it -> [it[1], it[2]] }
-  .tap { mzids_perco }
-  .buffer(size: amount_mzml.value)
-  .map { it.sort( {a, b -> a[0] <=> b[0]}) }
-  .map { it -> [it.collect() { it[0] }, it.collect() { it[1] }] }
+  .groupTuple()
   .set { mzids_2pin }
-
-/*
-tmzids = Channel.create()
-dmzids = Channel.create()
-
-tmzids
-  .buffer(size: amount_mzml.value)
-  .flatMap { it.sort( {a, b -> a['sample'] <=> b['sample']}) }
-  .buffer(size: params.ppoolsize, remainder: true) 
-  .map { it -> [it.collect() { it['fn'] }, it.collect() { it['sample'] }] }
-  .set { buffer_mzid_target }
-dmzids
-  .buffer(size: amount_mzml.value)
-  .flatMap { it.sort({a, b -> a['sample'] <=> b['sample'] }) }
-  .buffer(size: params.ppoolsize, remainder: true)
-  .map { it -> [it.collect() { it['fn'] }, it.collect() { it['sample'] }] }
-  .set { buffer_mzid_decoy }
-*/
 
 
 process percolator {
@@ -244,10 +242,10 @@ process percolator {
   container 'quay.io/biocontainers/percolator:3.1--boost_1.623'
 
   input:
-  set val(samples), file('mzid?') from mzids_2pin
+  set val(setname), val(samples), file('mzid?') from mzids_2pin
 
   output:
-  file('perco.xml') into percolated
+  set val(setname), file('perco.xml') into percolated
 
   """
   echo $samples
@@ -263,14 +261,14 @@ process filterPercolator {
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
-  file x from percolated
+  set val(setname), file(x) from percolated
   file 'trypseqdb' from trypseqdb
   file 'protseqdb' from protseqdb
   file knownproteins
 
   output:
-  set val('novel'), file('fp_th0.xml') into var_filtered_perco
-  set val('variant'), file('fp_th1.xml') into nov_filtered_perco
+  set val(setname), val('novel'), file('fp_th0.xml') into var_filtered_perco
+  set val(setname), val('variant'), file('fp_th1.xml') into nov_filtered_perco
   """
   msspercolator splitprotein -i perco.xml --protheaders '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc' '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
   msspercolator filterseq -i perco.xml_h0.xml -o fs_th0.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
@@ -280,27 +278,26 @@ process filterPercolator {
   """
 }
 
-var_filtered_perco
-  .concat(nov_filtered_perco)
-  .set { filtered_perco }
-
-  //set val(sample), (file('out.mzid.tsv') into mzidtsvs
 mzidtsvs
-  .buffer(size: amount_mzml.value)
-  .map { it -> [it.collect() { it[1] }, it.collect() { it[2] }] }
-  .combine(filtered_perco)
-  .set { allmzidtsv }
+  .groupTuple()
+  .tap { variantmzidtsv }
+  .join(nov_filtered_perco)
+  .set { nov_mzperco }
 
+variantmzidtsv
+  .join(var_filtered_perco)
+  .concat(nov_mzperco)
+  .set { allmzperco }
 
 process svmToTSV {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
-  set file('mzident?'), file('mzidtsv?'), val(peptype), file(perco) from allmzidtsv
+  set val(setname), file('mzident?'), file('mzidtsv?'), val(peptype), file(perco) from allmzperco 
 
   output:
-  set val(peptype), file('mzidperco') into mzidtsv_perco
+  set val(setname), val(peptype), file('mzidperco') into mzidtsv_perco
 
   script:
   """
@@ -347,18 +344,19 @@ with open('mzidperco', 'w') as fp:
   """
 }
 
+mzidtsv_perco
+  .combine(spec_lookup)
+  .set { prepsm }
+
 process createPSMPeptideTable {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
   
-  publishDir "${params.outdir}", mode: 'copy', overwrite: true
-
   input:
-  set val(peptype), file('psms') from mzidtsv_perco
-  file 'lookup' from spec_lookup
+  set val(setname), val(peptype), file('psms'), file('lookup') from prepsm
 
   output:
-  set val(peptype), file("${peptype}_psmtable.txt") into psmtable
+  set val(setname), val(peptype), file("${setname}_${peptype}_psmtable.txt") into psmtable
 
   script:
   if(params.isobaric)
@@ -368,8 +366,8 @@ process createPSMPeptideTable {
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
   msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt
-  msspsmtable quant -i prepsms.txt -o ${peptype}_psmtable.txt --dbfile psmlookup --isobaric
-  sed 's/\\#SpecFile/SpectraFile/' -i ${peptype}_psmtable.txt
+  msspsmtable quant -i prepsms.txt -o ${setname}_${peptype}_psmtable.txt --dbfile psmlookup --isobaric
+  sed 's/\\#SpecFile/SpectraFile/' -i ${setname}_${peptype}_psmtable.txt
   """
   else
   """
@@ -377,31 +375,54 @@ process createPSMPeptideTable {
   msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
-  msspsmtable specdata -i filtpep --dbfile psmlookup -o ${peptype}_psmtable.txt
-  sed 's/\\#SpecFile/SpectraFile/' -i ${peptype}_psmtable.txt
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o ${setname}_${peptype}_psmtable.txt
+  sed 's/\\#SpecFile/SpectraFile/' -i ${setname}_${peptype}_psmtable.txt
   """
 }
+
+
 
 variantpsms = Channel.create()
 novelpsms = Channel.create()
 psmtable
-  .tap { both_psmtables }
-  .choice( variantpsms, novelpsms ) { it -> it[0] == 'variant' ? 0 : 1 }
+  .tap { setmergepsmtables; both_psmtables }
+  .choice( variantpsms, novelpsms ) { it -> it[1] == 'variant' ? 0 : 1 }
  both_psmtables
-  .map { it -> it[1] }
-  .collect()
+  .groupTuple()
+  .map { it -> [it[0], it[2]] }
   .set { psms_prepep }
 
  
+setmergepsmtables
+  .groupTuple(by: 1)
+  .set { psmmerge_in }
+
+process mergeSetPSMtable {
+  container 'ubuntu:latest'
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true
+
+  input:
+  set val(setnames), val(peptype), file(psmtables) from psmmerge_in
+
+  output:
+  file "${peptype}_psmtable.txt" into produced_psmtables
+
+  """
+  head -n1 ${psmtables[0]} > ${peptype}_psmtable.txt
+  for fn in ${psmtables.join(' ')}; do tail -n+2 \$fn >> ${peptype}_psmtable.txt; done
+  """
+}
+
+
 process prePeptideTable {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
   
   input:
-  file('psms?') from psms_prepep
+  set val(setname), file('psms?') from psms_prepep
 
   output:
-  file('prepeptidetable.txt') into prepeptable
+  set val(setname), file('prepeptidetable.txt') into prepeptable
 
   script:
   if(params.isobaric)
@@ -422,10 +443,10 @@ process createPeptideTable{
   container 'ubuntu:latest'
 
   input:
-  file 'prepeptidetable.txt' from prepeptable
+  set val(setname), file('prepeptidetable.txt') from prepeptable
 
   output:
-  file 'peptide_table.txt' into peptable
+  set val(setname), file('peptide_table.txt') into peptable
 
   """
   paste <( cut -f 12 prepeptidetable.txt) <( cut -f 13 prepeptidetable.txt) <( cut -f 3,7-9,11,14-22 prepeptidetable.txt) > peptide_table.txt
@@ -434,28 +455,27 @@ process createPeptideTable{
 
 
 novelpsms
-  .map { it -> it[1] }
   .into{novelpsmsFastaBedGFF; novelpsms_specai}
 
 
 process createFastaBedGFF {
   container 'pgpython'
  
-  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "novel_peptides.gff3" ? "novel_peptides.gff3" : null}
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "${setname}_novel_peptides.gff3" ? "${setname}_novel_peptides.gff3" : null}
  
   input:
-  file novelpsmsFastaBedGFF
+  set val(setname), val(peptype), file(psms) from novelpsmsFastaBedGFF
   file gtffile
   file tdb
  
   output:
-  file 'novel_peptides.fa' into novelfasta
-  file 'novel_peptides.bed' into novelbed
-  file 'novel_peptides.gff3' into novelGFF3
-  file 'novel_peptides.tab.txt' into novelpep
+  set val(setname), file('novel_peptides.fa') into novelfasta
+  set val(setname), file('novel_peptides.bed') into novelbed
+  set val(setname), file("${setname}_novel_peptides.gff3") into novelGFF3
+  set val(setname), file('novel_peptides.tab.txt') into novelpep
  
   """
-  python3 /pgpython/map_novelpeptide2genome.py --input $novelpsmsFastaBedGFF --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out novel_peptides.gff3 --bed_out novel_peptides.bed
+  python3 /pgpython/map_novelpeptide2genome.py --input $psms --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out ${setname}_novel_peptides.gff3 --bed_out novel_peptides.bed
   """
 }
 
@@ -469,11 +489,11 @@ process BlastPNovel {
   container 'quay.io/biocontainers/blast:2.7.1--boost1.64_1'
 
   input:
-  file novelfasta from blastnovelfasta
+  set val(setname), file(novelfasta) from blastnovelfasta
   file blastdb
 
   output:
-  file 'blastp_out.txt' into novelblast
+  set val(setname), file('blastp_out.txt') into novelblast
   
   """
   makeblastdb -in $blastdb -dbtype prot
@@ -481,82 +501,102 @@ process BlastPNovel {
   """
 }
 
+novelpsms_specai
+  .map { it -> [it[0], it[2]] }
+  .join(blastnovelpep)
+  .join(novelblast)
+  .set { novelblastout }
+
 process ParseBlastpOut {
  container 'pgpython'
  
  input:
- file novelpsms from novelpsms_specai
- file novelpep from blastnovelpep
- file novelblast from novelblast
+ set val(setname), file(psms), file(novelpep), file(novelblast) from novelblastout
  file blastdb
 
  output:
- file 'peptable_blastp.txt' into peptable_blastp
- file 'single_mismatch_novpeps.txt' into novpeps_singlemis
+ set val(setname), file('peptable_blastp.txt') into peptable_blastp
+ set val(setname), file('single_mismatch_novpeps.txt') into novpeps_singlemis
 
  """
  python3 /pgpython/parse_BLASTP_out.py --input $novelpep --blastp_result $novelblast --fasta $blastdb --output peptable_blastp.txt
- python3 /pgpython/extract_1mismatch_novpsm.py peptable_blastp.txt $novelpsms single_mismatch_novpeps.txt
+ python3 /pgpython/extract_1mismatch_novpsm.py peptable_blastp.txt $psms single_mismatch_novpeps.txt
  """
 
 }
+
+groupset_mzmls
+  .groupTuple()
+  .tap { var_specaimzmls }
+  .join(novpeps_singlemis)
+  .set { grouped_saavnov_mzml_peps }
+  
 
 process ValidateSingleMismatchNovpeps {
   container 'spectrumai'
   
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "precursorError.histogram.plot.pdf" ? "${setname}_novel_precursorError_plot.pdf" : it }
+  
   input:
-  file x from novpeps_singlemis
-  file mzml from singlemismatch_nov_mzmls
+  set val(setname), val(samples), file(mzmls), file(peps) from grouped_saavnov_mzml_peps
 
   output:
-  file 'singlemis_specai.txt' into singlemis_specai
+  set val(setname), file("${setname}_novel_saav_specai.txt") into singlemis_specai
+  file 'precursorError.histogram.plot.pdf' into novel_specai_plot
 
   """
   mkdir mzmls
-  for fn in $mzml; do ln -s `pwd`/\$fn mzmls/; done
-  Rscript /SpectrumAI/SpectrumAI.R mzmls $x singlemis_specai.txt || cp $x singlemis_specai.txt
+  for fn in $mzmls; do ln -s `pwd`/\$fn mzmls/; done
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $peps ${setname}_novel_saav_specai.txt || cp $peps singlemis_specai.txt
   """
 }
+
+singlemis_specai
+  .join(peptable_blastp)
+  .set { nov_specaiparse }
 
 process novpepSpecAIOutParse {
   container 'pgpython'
 
   input:
-  file x from singlemis_specai 
-  file 'peptide_table.txt' from peptable_blastp 
+  set val(setname), file(x), file('peptide_table.txt') from nov_specaiparse
   
   output:
-  file 'novpep_specai.txt' into novpep_singlemisspecai
+  set val(setname), file('novpep_specai.txt') into novpep_singlemisspecai
 
   """
   python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_specai.txt
   """
 }
 
+
 process BLATNovel {
   container 'quay.io/biocontainers/blat:35--1'
 
   input:
-  file novelfasta from blatnovelfasta
+  set val(setname), file(novelfasta) from blatnovelfasta
   file genomefa
 
   output:
-  file 'blat_out.pslx' into novelblat
+  set val(setname), file('blat_out.pslx') into novelblat
 
   """
   blat $genomefa $novelfasta -t=dnax -q=prot -tileSize=5 -minIdentity=99 -out=pslx blat_out.pslx 
   """
 }
 
+novelblat
+  .join(blatnovelpep)
+  .set { novblatparse }
+
 process parseBLATout {
  container 'pgpython'
 
  input:
- file novelblat from novelblat
- file novelpep from blatnovelpep
+ set val(setname), file(novelblat), file(novelpep) from novblatparse
 
  output:
- file 'peptable_blat.txt' into peptable_blat
+ set val(setname), file('peptable_blat.txt') into peptable_blat
 
  """
  python3 /pgpython/parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
@@ -569,11 +609,11 @@ process labelnsSNP {
   container 'pgpython'
   
   input:
-  file peptable from snpnovelpep
+  set val(setname), file(peptable) from snpnovelpep
   file snpfa
 
   output:
-  file 'nssnp.txt' into ns_snp_out
+  set val(setname), file('nssnp.txt') into ns_snp_out
 
   """
   python3 /pgpython/label_nsSNP_pep.py --input $peptable --nsSNPdb $snpfa --output nssnp.txt
@@ -587,9 +627,9 @@ process phastcons {
   container 'pgpython'
   
   input:
-  file novelgff from novelGFF3_phast
+  set val(setname), file(novelgff) from novelGFF3_phast
   output:
-  file 'phastcons.txt' into phastcons_out
+  set val(setname), file ('phastcons.txt') into phastcons_out
 
   """
   python3 /pgpython/calculate_phastcons.py $novelgff /bigwigs/hg19.100way.phastCons.bw phastcons.txt
@@ -601,10 +641,10 @@ process phyloCSF {
   container 'pgpython'
 
   input:
-  file novelgff from novelGFF3_phylo
+  set val(setname), file(novelgff) from novelGFF3_phylo
 
   output:
-  file 'phylocsf.txt' into phylocsf_out
+  set val(setname), file('phylocsf.txt') into phylocsf_out
 
   """
   python3 /pgpython/calculate_phylocsf.py $novelgff /bigwigs phylocsf.txt
@@ -629,11 +669,11 @@ process scanBams {
   when: params.bamfiles
 
   input:
-  file gff from novelGFF3_bams
+  set val(setname), file(gff) from novelGFF3_bams
   file bams from bamFiles
   
   output:
-  file 'scannedbams.txt' into scannedbams
+  set val(setname), file('scannedbams.txt') into scannedbams
 
   """
   ls *.bam > bamfiles.txt
@@ -647,9 +687,10 @@ process annovar {
   container 'annovar'
   
   input:
-  file novelbed
+  set val(setname), file(novelbed) from novelbed
+
   output:
-  file 'novpep_annovar.variant_function' into annovar_out
+  set val(setname), file('novpep_annovar.variant_function') into annovar_out
 
   """
   /annovar/annotate_variation.pl -out novpep_annovar -build hg19 $novelbed /annovar/humandb/
@@ -657,41 +698,54 @@ process annovar {
 
 }
 
+annovar_out
+  .join(annonovelpep)
+  .set { parseanno }
+
 process parseAnnovarOut {
   
   container 'pgpython'
   
   input:
-  file anno from annovar_out
-  file novelpep from annonovelpep
+  set val(setname), file(anno), file(novelpep) from parseanno
 
   output:
-  file 'parsed_annovar.txt' into annovar_parsed
+  set val(setname), file('parsed_annovar.txt') into annovar_parsed
 
   """
   python3 /pgpython/parse_annovar_out.py --input $novelpep --output parsed_annovar.txt --annovar_out $anno 
   """
 }
 
-scannedbams
-  .ifEmpty('No bams')
-  .set { bamsOrEmpty }
+if (params.bamfiles){
+  scannedbams
+    .set { bamsOrEmpty }
+}
+else {
+  sets_for_emtpybam
+    .map { it -> [it, 'No bams'] }
+    .set { bamsOrEmpty }
+}
+
+ns_snp_out
+  .join(novpep_singlemisspecai)
+  .join(peptable_blat)
+  .join(annovar_parsed)
+  .join(phastcons_out)
+  .join(phylocsf_out)
+  .join(bamsOrEmpty)
+  .set { combined_novel }
+
 
 process combineResults{
   
   container 'pgpython'
 
   input:
-  file a from ns_snp_out
-  file b from novpep_singlemisspecai
-  file c from peptable_blat
-  file d from annovar_parsed
-  file e from phastcons_out
-  file f from phylocsf_out
-  file g from bamsOrEmpty
+  set val(setname), file(a), file(b), file(c), file(d), file(e), file(f), file(g) from combined_novel
   
   output:
-  file 'combined' into combined_novelpep_output
+  set val(setname), file('combined') into combined_novelpep_output
   
   script:
   if (!params.bamfiles)
@@ -724,77 +778,101 @@ process combineResults{
 process addLociNovelPeptides{
   
   container 'pgpython'
-  publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
-  file x from combined_novelpep_output
+  set val(setname), file(x) from combined_novelpep_output
   
   output:
-  val('Finished validating novel peptides') into novelreport
-  file 'novel_peptides.txt' into novpeps_finished
+  set val('nov'), val(setname), file("${setname}_novel_peptides.txt") into novpeps_finished
   
   """
-  python3 /pgpython/group_novpepToLoci.py  --input $x --output novel_peptides.txt --distance 10kb
+  python3 /pgpython/group_novpepToLoci.py  --input $x --output ${setname}_novel_peptides.txt --distance 10kb
   """
 }
-
 
 process prepSpectrumAI {
 
   container 'pgpython'
   
   input:
-  set val(peptype), file(x) from variantpsms
+  set val(setname), val(peptype), file(psms) from variantpsms
   
   output:
-  file 'specai_in.txt' into specai_input
+  set val(setname), file('specai_in.txt') into var_specai_input
   
   """
-  python3 /pgpython/label_sub_pos.py --input_psm $x --output specai_in.txt
+  python3 /pgpython/label_sub_pos.py --input_psm $psms --output specai_in.txt
   """
 }
 
+
+var_specaimzmls
+  .join(var_specai_input)
+  .set { var_specai_inmzml }
 
 process SpectrumAI {
   container 'spectrumai'
 
-  input:
-  file specai_in from specai_input
-  file x from specaimzmls
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "precursorError.histogram.plot.pdf" ? "${setname}_variant_precursorError_plot.pdf" : it }
 
-  output: file 'specairesult.txt' into specai
+  input:
+  set val(setname), val(samples), file(mzmls), file(specai_in) from var_specai_inmzml
+
+  output:
+  set val(setname), file("${setname}_variant_specairesult.txt") into specai
+  file "precursorError.histogram.plot.pdf" into specai_plot
 
   """
   mkdir mzmls
-  for fn in $x; do ln -s `pwd`/\$fn mzmls/; done
+  for fn in $mzmls; do ln -s `pwd`/\$fn mzmls/; done
   ls mzmls
-  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in specairesult.txt
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $specai_in ${setname}_variant_specairesult.txt
   """
 }
 
+specai
+  .join(peptable)
+  .set { specai_peptable }
 
-process SpectrumAIOutParse {
+process mapVariantPeptidesToGenome {
 
   container 'pgpython'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
-  file x from specai
-  file peptides from peptable
+  set val(setname), file(x), file(peptides) from specai_peptable
   file cosmic
   file dbsnp
   
   output:
-  val('Validated variant peptides') into variantreport
-  file "variant_peptides.txt" into varpeps_finished
-  file "variant_peptides.saav.pep.hg19cor.vcf" into saavvcfs_finished
+  set val('var'), val(setname), file("${setname}_variant_peptides.txt") into varpeps_finished
+  file "${setname}_variant_peptides.saav.pep.hg19cor.vcf" into saavvcfs_finished
 
   """
-  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input $peptides --output variant_peptides.txt
-  python3 /pgpython/map_cosmic_snp_tohg19.py --input variant_peptides.txt --output variant_peptides.saav.pep.hg19cor.vcf --cosmic_input $cosmic --dbsnp_input $dbsnp
+  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input $peptides --output ${setname}_variant_peptides.txt
+  python3 /pgpython/map_cosmic_snp_tohg19.py --input ${setname}_variant_peptides.txt --output ${setname}_variant_peptides.saav.pep.hg19cor.vcf --cosmic_input $cosmic --dbsnp_input $dbsnp
   """
 }
+novpeps_finished
+  .concat(varpeps_finished) 
+  .groupTuple()
+  .set { setmerge_peps }
 
-variantreport
-  .mix(novelreport)
-  .subscribe { println(it) }
+process mergeSetPeptidetable {
+  container 'ubuntu:latest'
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true
+
+  input:
+  set val(peptype), val(setnames), file('peps?') from setmerge_peps
+
+  output:
+  file "${peptype}_peptidetable.txt" into produced_peptables
+
+  """
+  paste <(head -n1 peps1) <(echo Setname) > ${peptype}_peptidetable.txt
+  count=1;for setn in ${setnames.join(' ')}; do paste <(tail -n+2 peps\$count) <(yes \$setn|head -n \$(tail -n+2 peps\$count|wc -l)) >> ${peptype}_peptidetable.txt;((count++));done
+  """
+}
+produced_psmtables
+  .concat(produced_peptables)
+  .subscribe { println "Pipeline output ready: ${it}" }
