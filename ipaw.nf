@@ -23,12 +23,13 @@ if( ! nextflow.version.matches(">= ${nf_required_version}") ){
 
 
 /* SET DEFAULT PARAMS */
-mods = file('Mods.txt')
 params.isobaric = false
 params.activation = 'hcd'
 params.bamfiles = false
 params.outdir = 'result'
+params.mods = 'Mods.txt'
 
+mods = file(params.mods)
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
 gtffile = file(params.gtf)
