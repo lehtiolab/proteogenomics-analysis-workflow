@@ -72,11 +72,23 @@ mzml_in
 sets
   .map{ it -> it[1] }
   .unique()
-  .tap { sets_for_emtpybam }
+  .tap { sets_for_emtpybam; sets_for_denoms }
   .collect()
   .subscribe { println "Detected setnames: ${it.join(', ')}" }
 
 // FIXME can we get rid of amount_mzml should be per set I guess and probably deleted!
+
+// Get denominators if isobaric experiment
+// passed in form --denoms 'set1:126:128N set2:131 set4:129N:130C:131'
+if (params.isobaric && params.denoms) {
+  setdenoms = [:]
+  params.denoms.tokenize(' ').each{ it -> x=it.tokenize(':'); setdenoms.put(x[0], x[1..-1])}
+  set_denoms = Channel.value(setdenoms)
+} else if (params.isobaric) {
+  setdenoms = [:]
+  sets_for_denoms.reduce(setdenoms){ a, b -> a.put(b, ['_126']); return a }.set{ set_denoms }
+}
+
 
 process concatFasta {
  
@@ -423,34 +435,15 @@ process prePeptideTable {
   set val(setname), file('psms?') from psms_prepep
 
   output:
-  set val(setname), file('prepeptidetable.txt') into prepeptable
+  set val(setname), file('peptidetable.txt') into peptable
 
   script:
   if(params.isobaric)
   """
   msspsmtable merge -o psms.txt -i psms* 
-  msspeptable psm2pep -i psms.txt -o prepeptidetable.txt --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
-  """
-  else
-  """
-  msspsmtable merge -o psms.txt -i psms* 
-  msspeptable psm2pep -i psms.txt -o prepeptidetable.txt --scorecolpattern svm --spectracol 1
-  """
-}
-
-
-process createPeptideTable{
-
-  container 'ubuntu:latest'
-
-  input:
-  set val(setname), file('prepeptidetable.txt') from prepeptable
-
-  output:
-  set val(setname), file('peptide_table.txt') into peptable
-
-  """
-  paste <( cut -f 12 prepeptidetable.txt) <( cut -f 13 prepeptidetable.txt) <( cut -f 3,7-9,11,14-22 prepeptidetable.txt) > peptide_table.txt
+  msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
+  awk -F '\\t' 'BEGIN {OFS = FS} {print \$12,\$13,\$3,\$7,\$8,\$9,\$11,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22}' preisoquant > preordered
+  ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${set_denoms.value[setname].join(' ')} --protcol 11" : 'mv preordered peptidetable.txt'}
   """
 }
 
