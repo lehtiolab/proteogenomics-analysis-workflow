@@ -93,7 +93,7 @@ tar xvfz CosmicMutantExport.tsv.gz
 ```
 nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \ 
   --mzmls /path/to/\*.mzML --gtf /path/to/VarDB.gtf \
-  --knownproteins /path/to/ftp://ftp.ensembl.org/pub/release-91/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz
+  --knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa \
   --blastdb /path/to/UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta \
   --snpfa /path/to/MSCanProVar_ensemblV79.filtered.fasta \
   --genome /path/to/hg19.chr1-22.X.Y.M.fa.masked \
