@@ -27,6 +27,9 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
 
     `--tdb /path/to/vardb.fa --gtf /path/tovardb.gtf`
 
+  + Modification file for MSGF+. Default file is for TMT samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
+    `--mods Mods.txt`
+
   + Canonical protein FASTA for catching canonical proteins and BLAST
     `--blastdb /path/to/Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa`
     `--knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa`
