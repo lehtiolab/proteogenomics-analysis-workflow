@@ -439,7 +439,6 @@ process prePeptideTable {
   set val(setname), file('peptidetable.txt') into peptable
 
   script:
-  if(params.isobaric)
   """
   msspsmtable merge -o psms.txt -i psms* 
   msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
