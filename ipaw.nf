@@ -447,10 +447,13 @@ process prePeptideTable {
   """
 }
 
-
 novelpsms
   .into{novelpsmsFastaBedGFF; novelpsms_specai}
 
+peptable
+  .tap { presai_peptable }
+  .join(novelpsmsFastaBedGFF)
+  .set { novelFaBdGfPep }
 
 process createFastaBedGFF {
   container 'pgpython'
@@ -458,7 +461,7 @@ process createFastaBedGFF {
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "${setname}_novel_peptides.gff3" ? "${setname}_novel_peptides.gff3" : null}
  
   input:
-  set val(setname), val(peptype), file(psms) from novelpsmsFastaBedGFF
+  set val(setname), file(peptides) , val(peptype), file(psms) from novelFaBdGfPep
   file gtffile
   file tdb
  
@@ -467,9 +470,17 @@ process createFastaBedGFF {
   set val(setname), file('novel_peptides.bed') into novelbed
   set val(setname), file("${setname}_novel_peptides.gff3") into novelGFF3
   set val(setname), file('novel_peptides.tab.txt') into novelpep
+  set val(setname), file('novpep_perco_quant.txt') into novelpep_percoquant
  
   """
   python3 /pgpython/map_novelpeptide2genome.py --input $psms --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out ${setname}_novel_peptides.gff3 --bed_out novel_peptides.bed
+  sort -k 1b,1 <(tail -n+2 $peptides) |cut -f 1,14-500 > peptable_sorted
+  sort -k 2b,2 <(tail -n+2 novel_peptides.tab.txt) > novpep_sorted
+  paste <(cut -f 2 novpep_sorted) <(cut -f1,3-500 novpep_sorted) > novpep_pepcols
+  join novpep_pepcols peptable_sorted -j 1 -a1 -o auto -e 'NA' -t \$'\\t' > novpep_pqjoin
+  paste <(cut -f 2 novpep_pqjoin) <(cut -f1,3-500 novpep_pqjoin) > novpep_joined_pepcols
+  paste <(head -n1 novel_peptides.tab.txt)  <(cut -f 14-500 $peptides |head -n1) > header
+  cat header novpep_joined_pepcols > novpep_perco_quant.txt
   """
 }
 
@@ -727,6 +738,7 @@ ns_snp_out
   .join(annovar_parsed)
   .join(phastcons_out)
   .join(phylocsf_out)
+  .join(novelpep_percoquant)
   .join(bamsOrEmpty)
   .set { combined_novel }
 
@@ -736,25 +748,13 @@ process combineResults{
   container 'pgpython'
 
   input:
-  set val(setname), file(a), file(b), file(c), file(d), file(e), file(f), file(g) from combined_novel
+  set val(setname), file(a), file(b), file(c), file(d), file(e), file(f), file(g), file(h) from combined_novel
   
   output:
   set val(setname), file('combined') into combined_novelpep_output
   
   script:
   if (!params.bamfiles)
-  """
-  for fn in $a $b $c $d $e $f; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
-  join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
-  join joined1 $c -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined2
-  join joined2 $d -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined3
-  join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
-  join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
-  grep '^Peptide' joined5 > combined
-  grep -v '^Peptide' joined5 >> combined
-  """
-
-  else
   """
   for fn in $a $b $c $d $e $f $g; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
   join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
@@ -765,6 +765,20 @@ process combineResults{
   join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
   grep '^Peptide' joined6 > combined
   grep -v '^Peptide' joined6 >> combined
+  """
+
+  else
+  """
+  for fn in $a $b $c $d $e $f $g $h; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
+  join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
+  join joined1 $c -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined2
+  join joined2 $d -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined3
+  join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
+  join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
+  join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
+  join joined6 $h -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined7
+  grep '^Peptide' joined7 > combined
+  grep -v '^Peptide' joined7 >> combined
   """
 }
 
@@ -825,7 +839,7 @@ process SpectrumAI {
 }
 
 specai
-  .join(peptable)
+  .join(presai_peptable)
   .set { specai_peptable }
 
 process mapVariantPeptidesToGenome {
