@@ -14,4 +14,4 @@ ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF
 ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-2.bw /bigwigs/
 
 RUN git clone https://github.com/yafeng/proteogenomics_python /pgpython
-RUN cd /pgpython && git pull && git reset --hard 141410669f987497aabefa9b669fcf868401a544
+RUN cd /pgpython && git pull && git reset --hard 9dcfc181d94defa2776c25dec3271d230e46bc23
