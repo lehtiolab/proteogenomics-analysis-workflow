@@ -570,7 +570,8 @@ process novpepSpecAIOutParse {
   set val(setname), file('novpep_specai.txt') into novpep_singlemisspecai
 
   """
-  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_specai.txt
+  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_sa
+  cut -f 1,8-19 novpep_sa > novpep_specai.txt
   """
 }
 
