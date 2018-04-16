@@ -44,7 +44,8 @@ activationtype = activations[params.activation]
 massshifts = [tmt:0.0013, itraq:0.00125, false:0]
 plextype = params.isobaric ? params.isobaric.replaceFirst(/[0-9]+plex/, "") : false
 massshift = massshifts[plextype]
-msgfprotocol = [tmt:4, itraq:2, false:0][plextype]
+msgfprotocol = params.isobaric ? [tmt:4, itraq:2][plextype] : 0
+
 
 /* PIPELINE START */
 
@@ -72,11 +73,23 @@ mzml_in
 sets
   .map{ it -> it[1] }
   .unique()
-  .tap { sets_for_emtpybam }
+  .tap { sets_for_emtpybam; sets_for_denoms }
   .collect()
   .subscribe { println "Detected setnames: ${it.join(', ')}" }
 
 // FIXME can we get rid of amount_mzml should be per set I guess and probably deleted!
+
+// Get denominators if isobaric experiment
+// passed in form --denoms 'set1:126:128N set2:131 set4:129N:130C:131'
+if (params.isobaric && params.denoms) {
+  setdenoms = [:]
+  params.denoms.tokenize(' ').each{ it -> x=it.tokenize(':'); setdenoms.put(x[0], x[1..-1])}
+  set_denoms = Channel.value(setdenoms)
+} else if (params.isobaric) {
+  setdenoms = [:]
+  sets_for_denoms.reduce(setdenoms){ a, b -> a.put(b, ['_126']); return a }.set{ set_denoms }
+}
+
 
 process concatFasta {
  
@@ -349,7 +362,7 @@ mzidtsv_perco
   .combine(spec_lookup)
   .set { prepsm }
 
-process createPSMPeptideTable {
+process createPSMTables {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
   
@@ -382,21 +395,17 @@ process createPSMPeptideTable {
 }
 
 
-
 variantpsms = Channel.create()
 novelpsms = Channel.create()
 psmtable
-  .tap { setmergepsmtables; both_psmtables }
+  .tap { setmergepsmtables; peppsms }
   .choice( variantpsms, novelpsms ) { it -> it[1] == 'variant' ? 0 : 1 }
- both_psmtables
-  .groupTuple()
-  .map { it -> [it[0], it[2]] }
-  .set { psms_prepep }
 
  
 setmergepsmtables
   .groupTuple(by: 1)
   .set { psmmerge_in }
+
 
 process mergeSetPSMtable {
   container 'ubuntu:latest'
@@ -420,44 +429,30 @@ process prePeptideTable {
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
   
   input:
-  set val(setname), file('psms?') from psms_prepep
+  set val(setname), val(peptype), file('psms?') from peppsms 
 
   output:
-  set val(setname), file('prepeptidetable.txt') into prepeptable
+  set val(setname), val(peptype), file('peptidetable.txt') into peptable
 
   script:
-  if(params.isobaric)
   """
   msspsmtable merge -o psms.txt -i psms* 
-  msspeptable psm2pep -i psms.txt -o prepeptidetable.txt --scorecolpattern svm --spectracol 1 --isobquantcolpattern plex
-  """
-  else
-  """
-  msspsmtable merge -o psms.txt -i psms* 
-  msspeptable psm2pep -i psms.txt -o prepeptidetable.txt --scorecolpattern svm --spectracol 1
+  msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 ${params.isobaric ? '--isobquantcolpattern plex' : ''}
+  awk -F '\\t' 'BEGIN {OFS = FS} {print \$12,\$13,\$3,\$7,\$8,\$9,\$11,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22}' preisoquant > preordered
+  ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${set_denoms.value[setname].join(' ')} --protcol 11" : 'mv preordered peptidetable.txt'}
   """
 }
-
-
-process createPeptideTable{
-
-  container 'ubuntu:latest'
-
-  input:
-  set val(setname), file('prepeptidetable.txt') from prepeptable
-
-  output:
-  set val(setname), file('peptide_table.txt') into peptable
-
-  """
-  paste <( cut -f 12 prepeptidetable.txt) <( cut -f 13 prepeptidetable.txt) <( cut -f 3,7-9,11,14-22 prepeptidetable.txt) > peptide_table.txt
-  """
-}
-
 
 novelpsms
   .into{novelpsmsFastaBedGFF; novelpsms_specai}
 
+novelprepep = Channel.create()
+presai_peptable = Channel.create()
+peptable
+  .choice( presai_peptable, novelprepep ) { it -> it[1] == 'variant' ? 0 : 1 }
+novelprepep
+  .join(novelpsmsFastaBedGFF)
+  .set { novelFaBdGfPep }
 
 process createFastaBedGFF {
   container 'pgpython'
@@ -465,7 +460,7 @@ process createFastaBedGFF {
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "${setname}_novel_peptides.gff3" ? "${setname}_novel_peptides.gff3" : null}
  
   input:
-  set val(setname), val(peptype), file(psms) from novelpsmsFastaBedGFF
+  set val(setname), val(peptype), file(peptides) , val(psmtype), file(psms) from novelFaBdGfPep
   file gtffile
   file tdb
  
@@ -474,9 +469,17 @@ process createFastaBedGFF {
   set val(setname), file('novel_peptides.bed') into novelbed
   set val(setname), file("${setname}_novel_peptides.gff3") into novelGFF3
   set val(setname), file('novel_peptides.tab.txt') into novelpep
+  set val(setname), file('novpep_perco_quant.txt') into novelpep_percoquant
  
   """
   python3 /pgpython/map_novelpeptide2genome.py --input $psms --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out ${setname}_novel_peptides.gff3 --bed_out novel_peptides.bed
+  sort -k 1b,1 <(tail -n+2 $peptides) |cut -f 1,14-500 > peptable_sorted
+  sort -k 2b,2 <(tail -n+2 novel_peptides.tab.txt) > novpep_sorted
+  paste <(cut -f 2 novpep_sorted) <(cut -f1,3-500 novpep_sorted) > novpep_pepcols
+  join novpep_pepcols peptable_sorted -j 1 -a1 -o auto -e 'NA' -t \$'\\t' > novpep_pqjoin
+  paste <(cut -f 2 novpep_pqjoin) <(cut -f1,3-500 novpep_pqjoin) > novpep_joined_pepcols
+  paste <(head -n1 novel_peptides.tab.txt)  <(cut -f 14-500 $peptides |head -n1) > header
+  cat header novpep_joined_pepcols > novpep_perco_quant.txt
   """
 }
 
@@ -498,7 +501,7 @@ process BlastPNovel {
   
   """
   makeblastdb -in $blastdb -dbtype prot
-  blastp -db $blastdb -query $novelfasta -outfmt '6 qseqid sseqid pident qlen slen qstart qend sstart send mismatch positive gapopen gaps qseq sseq evalue bitscore' -num_threads 8 -max_target_seqs 1 -evalue 1000 -out blastp_out.txt
+  blastp -db $blastdb -query $novelfasta -outfmt '6 qseqid sseqid pident qlen slen qstart qend sstart send mismatch positive gapopen gaps qseq sseq evalue bitscore' -num_threads 4 -max_target_seqs 1 -evalue 1000 -out blastp_out.txt
   """
 }
 
@@ -566,7 +569,8 @@ process novpepSpecAIOutParse {
   set val(setname), file('novpep_specai.txt') into novpep_singlemisspecai
 
   """
-  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_specai.txt
+  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_sa
+  cut -f 1,8-19 novpep_sa > novpep_specai.txt
   """
 }
 
@@ -734,6 +738,7 @@ ns_snp_out
   .join(annovar_parsed)
   .join(phastcons_out)
   .join(phylocsf_out)
+  .join(novelpep_percoquant)
   .join(bamsOrEmpty)
   .set { combined_novel }
 
@@ -743,25 +748,13 @@ process combineResults{
   container 'pgpython'
 
   input:
-  set val(setname), file(a), file(b), file(c), file(d), file(e), file(f), file(g) from combined_novel
+  set val(setname), file(a), file(b), file(c), file(d), file(e), file(f), file(g), file(h) from combined_novel
   
   output:
   set val(setname), file('combined') into combined_novelpep_output
   
   script:
   if (!params.bamfiles)
-  """
-  for fn in $a $b $c $d $e $f; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
-  join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
-  join joined1 $c -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined2
-  join joined2 $d -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined3
-  join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
-  join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
-  grep '^Peptide' joined5 > combined
-  grep -v '^Peptide' joined5 >> combined
-  """
-
-  else
   """
   for fn in $a $b $c $d $e $f $g; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
   join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
@@ -772,6 +765,20 @@ process combineResults{
   join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
   grep '^Peptide' joined6 > combined
   grep -v '^Peptide' joined6 >> combined
+  """
+
+  else
+  """
+  for fn in $a $b $c $d $e $f $g $h; do sort -k 1b,1 \$fn > tmpfn; mv tmpfn \$fn; done
+  join $a $b -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined1
+  join joined1 $c -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined2
+  join joined2 $d -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined3
+  join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
+  join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
+  join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
+  join joined6 $h -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined7
+  grep '^Peptide' joined7 > combined
+  grep -v '^Peptide' joined7 >> combined
   """
 }
 
@@ -832,7 +839,7 @@ process SpectrumAI {
 }
 
 specai
-  .join(peptable)
+  .join(presai_peptable)
   .set { specai_peptable }
 
 process mapVariantPeptidesToGenome {
@@ -841,7 +848,7 @@ process mapVariantPeptidesToGenome {
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
-  set val(setname), file(x), file(peptides) from specai_peptable
+  set val(setname), file(x), val(peptype), file(peptides) from specai_peptable
   file cosmic
   file dbsnp
   

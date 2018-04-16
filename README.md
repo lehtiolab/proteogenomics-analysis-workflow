@@ -5,6 +5,10 @@ This is a workflow to identify, curate, and validate variant and novel peptides 
 
 Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threads (adjust as you see fit) on a concatenated target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation.
 
+Please cite this paper when you have used the workflow for publications.
+
+Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbridge A, Branca RMM, Lehtio J: Discovery of coding regions in the human genome by integrated proteogenomics analysis workflow. Nat Commun 2018, 9(1):903.  [PMID: 29500430](https://www.ncbi.nlm.nih.gov/pubmed/29500430)
+
 ![workflow image](https://github.com/lehtiolab/proteogenomics-analysis-workflow/blob/master/images/workflow.png)
 
 ### Requirements
@@ -27,6 +31,9 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
 
     `--tdb /path/to/vardb.fa --gtf /path/tovardb.gtf`
 
+  + Modification file for MSGF+. Default file is for TMT samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
+    `--mods Mods.txt`
+
   + Canonical protein FASTA for catching canonical proteins and BLAST
     `--blastdb /path/to/Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa`
     `--knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa`
@@ -42,7 +49,7 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
   + Isobaric quantification type used and activation (leave out for no isobaric quant)
 
     ```
-    # default is NO isobaric quant. Use below or tmt6plex, tmt2plex, itraq8plex, itraq4plex 
+    # default is NO isobaric quant (label-free). Don't use this option unless for tmt10plex, tmt6plex, tmt2plex, itraq8plex, itraq4plex
     --isobaric tmt10plex
     --activation hcd  # default else use cid, etd
     ```
@@ -57,14 +64,20 @@ Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threa
 # Get this repo
 git clone https://github.com/proteogenomics-analysis-workflow
 cd proteogenomics-analysis-workflow
+
 # Get Annovar
+cd dockerfiles
 wget __link_you_get_from_annovar__
 tar xvfz annovar.latest.tar.gz
 
-# Create containers
+# Download bigwigs
+docker build -f pgpython_Dockerfile -t pgpython_bigwigs .  # downloads bigwig files, takes a long time
+
+# Create pipeline containers
 docker build -f spectrumAI_Dockerfile -t spectrumai .
 docker build -f annovar_Dockerfile -t annovar .
-docker build -f pgpython_Dockerfile -t pgpython .  # downloads bigwig files, takes a long time
+docker build -f pgpython_Dockerfile -t pgpython . 
+cd ..
 
 # In the meantime, download and extract varDB data (Fasta, GTF, BlastP, SNP Fasta) to a good spot
 wget http://lehtiolab.se/Supplementary_Files/varDB_data.tar.gz
@@ -89,15 +102,18 @@ tar xvfz CosmicMutantExport.tsv.gz
 ```
 
 ### Analyse your mzML files
-
+Example command to search TMT 10-plex labelled data.
+Remove  `--isobaric tmt10plex`  if you have label-free data.
 ```
 nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \ 
   --mzmls /path/to/\*.mzML --gtf /path/to/VarDB.gtf \
-  --knownproteins /path/to/ftp://ftp.ensembl.org/pub/release-91/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz
+  --mods /path/to/mods.txt \
+  --knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa \
   --blastdb /path/to/UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta \
+  --cosmic /path/to/CosmicMutantExport.tsv \
   --snpfa /path/to/MSCanProVar_ensemblV79.filtered.fasta \
   --genome /path/to/hg19.chr1-22.X.Y.M.fa.masked \
-  --dbsnp /path/to/snp142CodingDbSnp.txt
+  --dbsnp /path/to/snp142CodingDbSnp.txt \
   --bamfiles /path/to/\*.bam --isobaric tmt10plex \
   --outdir /path/to/results
 ```
