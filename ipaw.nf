@@ -362,7 +362,7 @@ mzidtsv_perco
   .combine(spec_lookup)
   .set { prepsm }
 
-process createPSMPeptideTable {
+process createPSMTables {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
   
@@ -395,21 +395,17 @@ process createPSMPeptideTable {
 }
 
 
-
 variantpsms = Channel.create()
 novelpsms = Channel.create()
 psmtable
-  .tap { setmergepsmtables; both_psmtables }
+  .tap { setmergepsmtables; peppsms }
   .choice( variantpsms, novelpsms ) { it -> it[1] == 'variant' ? 0 : 1 }
- both_psmtables
-  .groupTuple()
-  .map { it -> [it[0], it[2]] }
-  .set { psms_prepep }
 
  
 setmergepsmtables
   .groupTuple(by: 1)
   .set { psmmerge_in }
+
 
 process mergeSetPSMtable {
   container 'ubuntu:latest'
@@ -433,10 +429,10 @@ process prePeptideTable {
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
   
   input:
-  set val(setname), file('psms?') from psms_prepep
+  set val(setname), val(peptype), file('psms?') from peppsms 
 
   output:
-  set val(setname), file('peptidetable.txt') into peptable
+  set val(setname), val(peptype), file('peptidetable.txt') into peptable
 
   script:
   """
@@ -450,8 +446,11 @@ process prePeptideTable {
 novelpsms
   .into{novelpsmsFastaBedGFF; novelpsms_specai}
 
+novelprepep = Channel.create()
+presai_peptable = Channel.create()
 peptable
-  .tap { presai_peptable }
+  .choice( presai_peptable, novelprepep ) { it -> it[1] == 'variant' ? 0 : 1 }
+novelprepep
   .join(novelpsmsFastaBedGFF)
   .set { novelFaBdGfPep }
 
@@ -461,7 +460,7 @@ process createFastaBedGFF {
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "${setname}_novel_peptides.gff3" ? "${setname}_novel_peptides.gff3" : null}
  
   input:
-  set val(setname), file(peptides) , val(peptype), file(psms) from novelFaBdGfPep
+  set val(setname), val(peptype), file(peptides) , val(psmtype), file(psms) from novelFaBdGfPep
   file gtffile
   file tdb
  
@@ -849,7 +848,7 @@ process mapVariantPeptidesToGenome {
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
-  set val(setname), file(x), file(peptides) from specai_peptable
+  set val(setname), file(x), val(peptype), file(peptides) from specai_peptable
   file cosmic
   file dbsnp
   
