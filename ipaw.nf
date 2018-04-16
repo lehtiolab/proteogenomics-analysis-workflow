@@ -28,6 +28,11 @@ params.activation = 'hcd'
 params.bamfiles = false
 params.outdir = 'result'
 params.mods = 'Mods.txt'
+params.novheaders = '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc' 
+params.varheaders = '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
+
+novheaders = params.novheaders == true ? false : params.novheaders
+varheaders = params.varheaders == true ? false : params.varheaders
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
@@ -270,27 +275,72 @@ process percolator {
   """
 }
 
-process filterPercolator {
+
+percolated
+  .tap { var_percolated }
+  .set { nov_percolated }
+
+
+process getVariantPercolator {
+
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+  
+  when: varheaders
+
+  input:
+  set val(setname), file(x) from var_percolated
+
+  output:
+  set val(setname), val('variant'), file("${x}_h0.xml") into var_perco
+  """
+  msspercolator splitprotein -i $x --protheaders \'$varheaders\'
+  """
+}
+
+
+process getNovelPercolator {
 
   container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
+  when: novheaders
+
   input:
-  set val(setname), file(x) from percolated
+  set val(setname), file(x) from nov_percolated
+
+  output:
+  set val(setname), val('novel'), file("${x}_h0.xml") into nov_perco
+  """
+  msspercolator splitprotein -i $x --protheaders \'$novheaders\'
+  """
+}
+
+
+nov_perco
+  .concat(var_perco)
+  .set { splitperco }
+
+
+process filterPercolator {
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+
+  input:
+  set val(setname), val(peptype), file(perco) from splitperco
   file 'trypseqdb' from trypseqdb
   file 'protseqdb' from protseqdb
   file knownproteins
 
   output:
-  set val(setname), val('novel'), file('fp_th0.xml') into var_filtered_perco
-  set val(setname), val('variant'), file('fp_th1.xml') into nov_filtered_perco
+  set val(setname), val(peptype), file('filtprot') into filtered_perco
   """
-  msspercolator splitprotein -i perco.xml --protheaders '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc' '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
-  msspercolator filterseq -i perco.xml_h0.xml -o fs_th0.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
-  msspercolator filterseq -i perco.xml_h1.xml -o fs_th1.xml --dbfile trypseqdb --insourcefrag 2 --deamidate 
-  msspercolator filterprot -i fs_th0.xml -o fp_th0.xml --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
-  msspercolator filterprot -i fs_th1.xml -o fp_th1.xml --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
+  msspercolator filterseq -i $perco -o filtseq --dbfile trypseqdb --insourcefrag 2 --deamidate 
+  msspercolator filterprot -i filtseq -o filtprot --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
   """
 }
+
+nov_filtered_perco = Channel.create()
+var_filtered_perco = Channel.create()
+filtered_perco
+  .choice( var_filtered_perco, nov_filtered_perco) { it -> it[1] == 'variant' ? 0 : 1 }
 
 mzidtsvs
   .groupTuple()
