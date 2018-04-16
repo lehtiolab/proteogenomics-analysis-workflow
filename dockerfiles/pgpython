@@ -1,0 +1,8 @@
+FROM pgpython_bigwigs
+
+RUN apt-get update
+RUN apt-get install -y python3-pip python3-dev libcurl3-dev
+RUN pip3 install pyBigWig pysam
+
+RUN rm -r /pgpython; git clone https://github.com/yafeng/proteogenomics_python /pgpython
+RUN cd /pgpython && git pull && git reset --hard b72410bcaf339b768e121cb83ce82147d004d147

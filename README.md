@@ -64,14 +64,20 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
 # Get this repo
 git clone https://github.com/proteogenomics-analysis-workflow
 cd proteogenomics-analysis-workflow
+
 # Get Annovar
+cd dockerfiles
 wget __link_you_get_from_annovar__
 tar xvfz annovar.latest.tar.gz
 
-# Create containers
+# Download bigwigs
+docker build -f pgpython_Dockerfile -t pgpython_bigwigs .  # downloads bigwig files, takes a long time
+
+# Create pipeline containers
 docker build -f spectrumAI_Dockerfile -t spectrumai .
 docker build -f annovar_Dockerfile -t annovar .
-docker build -f pgpython_Dockerfile -t pgpython .  # downloads bigwig files, takes a long time
+docker build -f pgpython_Dockerfile -t pgpython . 
+cd ..
 
 # In the meantime, download and extract varDB data (Fasta, GTF, BlastP, SNP Fasta) to a good spot
 wget http://lehtiolab.se/Supplementary_Files/varDB_data.tar.gz
