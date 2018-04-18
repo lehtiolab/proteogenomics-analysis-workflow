@@ -5,4 +5,4 @@ RUN apt-get install -y python3-pip python3-dev libcurl3-dev
 RUN pip3 install pyBigWig pysam
 
 RUN rm -r /pgpython; git clone https://github.com/yafeng/proteogenomics_python /pgpython
-RUN cd /pgpython && git pull && git reset --hard 4457c8fd643545ff78044d1083ed9b6628443589
+RUN cd /pgpython && git pull && git reset --hard 7c2cf3ac5d6a1f7f15dd9019438a3a4332d30c26
