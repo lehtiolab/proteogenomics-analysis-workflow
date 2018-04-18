@@ -31,9 +31,6 @@ params.mods = 'Mods.txt'
 params.novheaders = '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc' 
 params.varheaders = '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
 
-novheaders = params.novheaders == true ? false : params.novheaders
-varheaders = params.varheaders == true ? false : params.varheaders
-
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
@@ -51,6 +48,18 @@ plextype = params.isobaric ? params.isobaric.replaceFirst(/[0-9]+plex/, "") : fa
 massshift = massshifts[plextype]
 msgfprotocol = params.isobaric ? [tmt:4, itraq:2][plextype] : 0
 
+//////////////////
+// FOR NON-VARDB DATABASES
+// E.g. 6FT, 3FT or WXS
+novheaders = params.novheaders == true ? false : params.novheaders
+varheaders = params.varheaders == true ? false : params.varheaders
+///////////////////
+
+///////////////////
+// FOR 6FT SPLIT DATABASES
+pipeptides = params.pisepdb ? file(params.pisepdb) : false
+splitscript = file('scripts/pi_database_splitter.py')
+//////////////////
 
 /* PIPELINE START */
 
@@ -69,20 +78,27 @@ Channel
 
 mzml_in
   .tap { sets }
-  .map { it -> [file(it[0]), it[1]]}
-  .map { it -> [it[1], it[0].baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it[0]] }
-  .tap{ mzmlfiles; mzml_isobaric; mzml_msgf }
+  .map { it -> [file(it[0]), it[1], it[2] ? it[2] : 'NA', it[3] ? it[3] : 'NA' ]} // create file, set plate and fraction to NA if there is none
+  .tap { strips }
+  .map { it -> [it[1], it[0].baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it[0], it[2], it[3]] }
+  .tap{ mzmlfiles; mzml_isobaric; mzml_premsgf }
   .count()
   .set{ amount_mzml }
 
 sets
   .map{ it -> it[1] }
   .unique()
-  .tap { sets_for_emtpybam; sets_for_denoms }
+  .tap { sets_for_emtpybam; sets_for_denoms; sets_for_six }
   .collect()
   .subscribe { println "Detected setnames: ${it.join(', ')}" }
 
 // FIXME can we get rid of amount_mzml should be per set I guess and probably deleted!
+
+strips
+  .map { it -> [it[1], it[2]] }
+  .unique()
+  .groupTuple()
+  .set { strips_for_six }
 
 // Get denominators if isobaric experiment
 // passed in form --denoms 'set1:126:128N set2:131 set4:129N:130C:131'
@@ -95,21 +111,112 @@ if (params.isobaric && params.denoms) {
   sets_for_denoms.reduce(setdenoms){ a, b -> a.put(b, ['_126']); return a }.set{ set_denoms }
 }
 
+sets_for_six
+  .toList()
+  .map { it -> [it, file(params.normalpsms)]}
+  .set { normpsms }
+
+process splitSetNormalSearchPsms {
+  //  normal search psm table, split on set col, collect files
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+
+  when: params.pisepdb
+  input:
+  set val(setnames), file('normalpsms') from normpsms
+  output:
+  set val(setnames), file({setnames.collect() { it + '.tsv' }}) into setnormpsms
+  """
+  msspsmtable split -i normalpsms --bioset
+  """
+}
+
+setnormpsms
+  .transpose()
+  .join(strips_for_six)
+  .set { setnormpsmtable } 
+
+process splitPlateNormalSearchPsms {
+  // create pep tables, split on plate, collect
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+
+  when: params.pisepdb
+  input:
+  set val(setname), file(normpsm), val(stripnames) from setnormpsmtable
+  output:
+  set val(setname), val(stripnames), file({stripnames.collect() { it + '.tsv' }}) into setplatepsms
+  """
+  msspsmtable split -i $normpsm --splitcol `python -c 'with open("$normpsm") as fp: h=next(fp).strip().split("\\t");print(h.index("Strip")+1)'`
+  """
+}
+
+setplatepsms
+  .transpose()
+  .set { setplatepsmtable }
+
+process normalSearchPsmsToPeptides {
+  // create pep tables, split on plate, collect
+  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
+
+  when: params.pisepdb
+  input:
+  set val(setname), val(strip), file(normpsm) from setplatepsmtable
+  output:
+  set val(setname), val(strip), file('peptides') into setplatepeptides
+  """
+  msspeptable psm2pep -i $normpsm -o peptides --scorecolpattern area --spectracol 1 
+  """
+}
+
+
+process create6FTDB {
+  // create 6FT DB per peptable-plate, collect fr 
+
+  when: params.pisepdb
+  container 'biopython/biopython'
+
+  input:
+  set val(setname), val(stripname), file(peptides) from setplatepeptides
+  file pipeptides
+  file splitscript
+
+  output:
+  set val(setname), val(stripname), file('target_fr*.fasta') into t_splitdb
+
+  script:
+  strips = ['3-10': [intercept: 3.5478, fr_width: 0.0676, tolerance: 0.11, fr_amount: 72, reverse: false]]
+  // FIXME strips define somewhere, possibly in config file
+  strip = strips[stripname]
+  """
+  python3 $splitscript -i $pipeptides -p $peptides --intercept $strip.intercept --width $strip.fr_width --tolerance $strip.tolerance --amount $strip.fr_amount  ${strip.reverse ? '--reverse' : ''} --deltacolpattern Delta --fdrcolpattern '^q-value' --picutoff 0.2 --fdrcutoff 0.0 --maxlen 50 --minlen 8
+  """
+}
+
+// channel match plate/fr/mzML
+if (params.pisepdb) {
+  t_splitdb
+    //.concat(d_splitdb)
+    .transpose()
+    .map { it -> ["${it[0]}_${it[1]}_${it[2].baseName.replaceFirst(/.*_fr[0]*/, "")}", it[2]]}
+    .set { db_w_id }
+} else {
+  Channel.from([['NA', tdb]]).view().set { db_w_id }
+}
+
 
 process concatFasta {
  
   container 'ubuntu:latest'
 
   input:
-  file tdb
+  set val(dbid), file(db) from db_w_id 
   file knownproteins
 
   output:
-  file('db.fa') into targetdb
+  set val(dbid), file('db.fa') into targetdb
 
   script:
   """
-  cat $tdb $knownproteins > db.fa
+  cat $db $knownproteins > db.fa
   """
 }
 
@@ -118,10 +225,10 @@ process makeDecoyReverseDB {
   container 'biopython/biopython'
 
   input:
-  file db from targetdb
+  set val(dbid), file(db) from targetdb
 
   output:
-  file('concatdb.fasta') into concatdb
+  set val(dbid), file('concatdb.fasta') into concatdb
 
   """
   #!/usr/bin/env python3
@@ -135,6 +242,22 @@ process makeDecoyReverseDB {
       SeqIO.write(decoy, wfp, 'fasta')
   """
 }
+
+
+if (params.pisepdb) {
+  mzml_premsgf
+    .map { it -> ["${it[0]}_${it[3]}_${it[4]}", it[0], it[1], it[2]] }  // add set_strip_fr identifier
+    .set { mzml_dbid }
+} else {
+  mzml_premsgf
+    .map { it -> ["NA", it[0], it[1], it[2]] }
+    .set { mzml_dbid }
+}
+concatdb
+  .cross(mzml_dbid) 
+  .map { it -> [it[0][0], it[0][1], it[1][1], it[1][2], it[1][3]] } // dbid, db, set, sample, file
+  .view()
+  .set { mzml_msgf }
 
 
 process makeProtSeq {
@@ -175,7 +298,7 @@ process IsobaricQuant {
   when: params.isobaric
 
   input:
-  set val(setname), val(sample), file(infile) from mzml_isobaric
+  set val(setname), val(sample), file(infile), val(strip), val(fraction) from mzml_isobaric
 
   output:
   set val(sample), file("${infile}.consensusXML") into isobaricxml
@@ -237,8 +360,7 @@ process msgfPlus {
   container 'quay.io/biocontainers/msgf_plus:2016.10.26--py27_1'
 
   input:
-  set val(setname), val(sample), file(x) from mzml_msgf
-  file(db) from concatdb
+  set val(setfr_id), file(db), val(setname), val(sample), file(x) from mzml_msgf
   file mods
 
   output:
@@ -580,6 +702,7 @@ process ParseBlastpOut {
 }
 
 groupset_mzmls
+  .map { it -> [it[0], it[1], it[2]] } // strip fraction, strip
   .groupTuple()
   .tap { var_specaimzmls }
   .join(novpeps_singlemis)
