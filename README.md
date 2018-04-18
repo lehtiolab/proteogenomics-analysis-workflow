@@ -71,12 +71,12 @@ wget __link_you_get_from_annovar__
 tar xvfz annovar.latest.tar.gz
 
 # Download bigwigs
-docker build -f pgpython_Dockerfile -t pgpython_bigwigs .  # downloads bigwig files, takes a long time
+docker build -f pgpython_bigwigs -t pgpython_bigwigs .  # downloads bigwig files, takes a long time
 
 # Create pipeline containers
-docker build -f spectrumAI_Dockerfile -t spectrumai .
+docker build -f spectrumAI -t spectrumai .
 docker build -f annovar_Dockerfile -t annovar .
-docker build -f pgpython_Dockerfile -t pgpython . 
+docker build -f pgpython -t pgpython . 
 cd ..
 
 # In the meantime, download and extract varDB data (Fasta, GTF, BlastP, SNP Fasta) to a good spot

@@ -1,3 +1,0 @@
-FROM perl
-
-COPY annovar /annovar
