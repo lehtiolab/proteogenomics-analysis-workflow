@@ -30,6 +30,8 @@ params.outdir = 'result'
 params.mods = 'Mods.txt'
 params.novheaders = '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc' 
 params.varheaders = '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
+params.saavheader = false
+params.noclassfdr = false
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
@@ -453,6 +455,13 @@ process filterPercolator {
 
   output:
   set val(setname), val(peptype), file('filtprot') into filtered_perco
+  
+  script:
+  if (params.noclassfdr)
+  """
+  mv $perco filtprot
+  """
+  else
   """
   msspercolator filterseq -i $perco -o filtseq --dbfile trypseqdb --insourcefrag 2 --deamidate 
   msspercolator filterprot -i filtseq -o filtprot --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate --enforce-tryptic
@@ -981,6 +990,13 @@ process prepSpectrumAI {
   output:
   set val(setname), file('specai_in.txt') into var_specai_input
   
+  script:
+  if (params.saavheader)
+  """
+  cat <(head -n1 $psms) <(grep $params.saavheader $psms) > saavpsms
+  python3 /pgpython/label_sub_pos.py --input_psm saavpsms --output specai_in.txt ${params.splitchar ? "--splitchar ${params.splitchar}" : ''}
+  """
+  else
   """
   python3 /pgpython/label_sub_pos.py --input_psm $psms --output specai_in.txt
   """
@@ -1030,10 +1046,13 @@ process mapVariantPeptidesToGenome {
   file "${setname}_variant_peptides.saav.pep.hg19cor.vcf" into saavvcfs_finished
 
   """
-  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input $peptides --output ${setname}_variant_peptides.txt
+  ${params.saavheader ? "cat <(head -n1 ${peptides}) <(grep ${params.saavheader} ${peptides}) > saavpeps" : "mv ${peptides} saavpeps" }
+  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input saavpeps --output setsaavs
+  ${params.saavheader ? "cat setsaavs <(grep -v ${params.saavheader} ${peptides} | sed \$'s/\$/\tNA/') > ${setname}_variant_peptides.txt" : "mv setsaavs ${setname}_variant_peptides.txt"}
   python3 /pgpython/map_cosmic_snp_tohg19.py --input ${setname}_variant_peptides.txt --output ${setname}_variant_peptides.saav.pep.hg19cor.vcf --cosmic_input $cosmic --dbsnp_input $dbsnp
   """
 }
+
 novpeps_finished
   .concat(varpeps_finished) 
   .groupTuple()
