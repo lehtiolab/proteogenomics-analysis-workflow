@@ -185,9 +185,7 @@ process create6FTDB {
   set val(setname), val(stripname), file('target_fr*.fasta') into t_splitdb
 
   script:
-  strips = ['3-10': [intercept: 3.5478, fr_width: 0.0676, tolerance: 0.11, fr_amount: 72, reverse: false]]
-  // FIXME strips define somewhere, possibly in config file
-  strip = strips[stripname]
+  strip = params.strips[stripname]
   """
   python3 $splitscript -i $pipeptides -p $peptides --intercept $strip.intercept --width $strip.fr_width --tolerance $strip.tolerance --amount $strip.fr_amount  ${strip.reverse ? '--reverse' : ''} --deltacolpattern Delta --fdrcolpattern '^q-value' --picutoff 0.2 --fdrcutoff 0.0 --maxlen 50 --minlen 8
   """
