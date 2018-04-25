@@ -154,9 +154,6 @@ def write_fractions(pi_peptides_fn, amount_fractions, bin_array, locate_function
         target_out_fp = {frnr: ([], stack.enter_context(
             open('target_fr{i:0{pad}}.fasta'.format(i=frnr, pad=amountpad), 'w')))
             for frnr in range(1, amount_fractions + 1)}
-        #decoy_out_fp = {frnr: ([], stack.enter_context(
-        #    open('decoy_fr{i:0{pad}}.fasta'.format(i=frnr, pad=amountpad), 'w')))
-        #    for frnr in range(1, amount_fractions + 1)}
         input_fp = stack.enter_context(open(pi_peptides_fn))
         pepcount = 0
         for line in input_fp:
@@ -166,27 +163,16 @@ def write_fractions(pi_peptides_fn, amount_fractions, bin_array, locate_function
                 continue
             elif len(pep) >= minlen:
                 pepcount += 1
-                #if pep[-1] in {'K', 'R'}:
-                #    rev_pep = pep[::-1][1:] + pep[-1]
-                #else:
-                #    rev_pep = pep[::-1]
                 for i in locate_function(pi, bin_array):
                     target_out_fp[i][0].append('>{}\n{}\n'.format(accs, pep))
-                    # write pseudoReversed decoy peptide at the same time
-                    #decoy_out_fp[i][0].append('>decoy_{}\n{}\n'.format(
-                    #    accs, rev_pep))
             if pepcount > 1000000:
                 # write in chunks to make it go faster
                 pepcount = 0
                 [fp.write(''.join(peps)) for peps, fp in
                  target_out_fp.values()]
-                [fp.write(''.join(peps)) for peps, fp in decoy_out_fp.values()]
                 target_out_fp = {fr: ([], pep_fp[1])
                                  for fr, pep_fp in target_out_fp.items()}
-                decoy_out_fp = {fr: ([], pep_fp[1])
-                                for fr, pep_fp in decoy_out_fp.items()}
         [fp.write(''.join(peps)) for peps, fp in target_out_fp.values()]
-        [fp.write(''.join(peps)) for peps, fp in decoy_out_fp.values()]
 
 
 if __name__ == '__main__':
