@@ -24,6 +24,9 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
   + mzML files containing MS data
   
     `--mzmls /path/to/\*.mzML  # mind the backslash before *`
+    + Modification file for MSGF+. Default file is for TMT samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
+    
+    `--mods Mods.txt # use standard Unimod name for modification`
   + __Optional__: BAM and BAI files (in same directory) from RNASeq experiment
   
     `--bamfiles /path/to/\*.bam  # mind the backslash`
@@ -31,17 +34,15 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
 
     `--tdb /path/to/vardb.fa --gtf /path/tovardb.gtf`
 
-  + Modification file for MSGF+. Default file is for TMT samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
-    `--mods Mods.txt`
-
   + Canonical protein FASTA for catching canonical proteins and BLAST
     `--blastdb /path/to/Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa`
     `--knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa`
 
   + SNP and COSMIC databases
 
-    `--snpfa /path/to/SNPdb.fa --dbsnp /path/to/SNP142CodingDbSnp.txt`
-    `--cosmic /path/to/CosmicMutantExport.tsv`
+   `--snpfa /path/to/SNPdb.fa # a fasta file containing peptide sequences derived from known nsSNPs`
+   `--dbsnp /path/to/SNP142CodingDbSnp.txt # a text file containing genomic coordinates of coding SNPs`
+   `--cosmic /path/to/CosmicMutantExport.tsv # a text file containing genomic coordinates of mutations`
 
   + Genome Masked FASTA to BLAT against
 
@@ -53,6 +54,14 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     --isobaric tmt10plex
     --activation hcd  # default else use cid, etd
     ```
+    + setting denominator for Isobaric quantification
+    
+    `--denoms # default is TMT tag 126 is used as denominator`
+    + setting different denominators for different sets. When running multiple iTRAQ or TMT experiments, different tags can be used as denominator.
+    In this case you have to combine `--mzmldef` ,  `--denoms` to define the setname, and corresponding denominators in each set.
+    `--mzmldef  # a tab deliminated text file with mzmlfilepath\tsetname`
+    `--denoms 'set1:126:128N set2:131 set3:129N:130C:131' # different sets seperated by space`
+    
 
 ### Prepare once
 
