@@ -134,3 +134,9 @@ nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \
   --bamfiles /path/to/\*.bam --isobaric tmt10plex \
   --outdir /path/to/results
 ```
+
+Nextflow command option:
+```
+-profile ## options are standard and testing. standard uses slurm system to queue the jobs. testing allocates 20 cores/cpus to run the command.
+-resume  ## use it to resume the jobs from the last stopped process.
+```
