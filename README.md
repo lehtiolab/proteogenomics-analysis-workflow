@@ -79,7 +79,7 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
   
 ```
 # Get this repo
-git clone https://github.com/proteogenomics-analysis-workflow
+git clone https://github.com/lehtiolab/proteogenomics-analysis-workflow
 cd proteogenomics-analysis-workflow
 
 # Get Annovar
@@ -111,8 +111,8 @@ gunzip Homo_sapiens.GRCh38.pep.all.fa.gz
 
 # Get the COSMIC database
 sftp 'your_email_address@example.com'@sftp-cancer.sanger.ac.uk
-# Download the data (NB version 71 currently works with the mapping script)
-sftp> get cosmic/grch37/cosmic/v71/CosmicMutantExport.tsv.gz
+# Download the data
+sftp> get cosmic/grch37/cosmic/v81/CosmicMutantExport.tsv.gz
 sftp> exit
 # Extract COSMIC data
 tar xvfz CosmicMutantExport.tsv.gz
@@ -133,10 +133,11 @@ nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \
   --dbsnp /path/to/snp142CodingDbSnp.txt \
   --bamfiles /path/to/\*.bam --isobaric tmt10plex \
   --outdir /path/to/results
+  -profile testing
 ```
 
 Nextflow command option:
 ```
--profile ## options are standard and testing. standard uses slurm system to queue the jobs. testing allocates 20 cores/cpus to run the command.
+-profile ## options are standard and testing. standard uses slurm system to queue the jobs. testing allocates 20 cores/cpus to run the command. The number of cores used in testing can be changed by editing the nextflow.config file.
 -resume  ## use it to resume the jobs from the last stopped process.
 ```
