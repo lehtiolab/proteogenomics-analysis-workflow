@@ -97,7 +97,7 @@ docker build -f pgpython -t pgpython .
 cd ..
 
 # In the meantime, download and extract varDB data (Fasta, GTF, BlastP, SNP Fasta) to a good spot
-wget http://lehtiolab.se/Supplementary_Files/varDB_data.tar.gz
+wget -O varDB_data.tar.gz https://ndownloader.figshare.com/files/13358006 
 tar xvfz varDB_data.tar.gz
 
 # Get the hg19 masked genome sequence
