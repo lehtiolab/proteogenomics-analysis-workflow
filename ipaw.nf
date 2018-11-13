@@ -113,10 +113,14 @@ if (params.isobaric && params.denoms) {
   sets_for_denoms.reduce(setdenoms){ a, b -> a.put(b, ['_126']); return a }.set{ set_denoms }
 }
 
-sets_for_six
-  .toList()
-  .map { it -> [it, file(params.normalpsms)]}
-  .set { normpsms }
+if (params.pisepdb) {
+  sets_for_six
+    .toList()
+    .map { it -> [it, file(params.normalpsms)]}
+    .set { normpsms }
+} else {
+  sets_for_six.set{ normpsms }
+}
 
 process splitSetNormalSearchPsms {
   //  normal search psm table, split on set col, collect files
@@ -199,7 +203,7 @@ if (params.pisepdb) {
     .map { it -> ["${it[0]}_${it[1]}_${it[2].baseName.replaceFirst(/.*_fr[0]*/, "")}", it[2]]}
     .set { db_w_id }
 } else {
-  Channel.from([['NA', tdb]]).view().set { db_w_id }
+  Channel.from([['NA', tdb]]).set { db_w_id }
 }
 
 
@@ -256,7 +260,6 @@ if (params.pisepdb) {
 concatdb
   .cross(mzml_dbid) 
   .map { it -> [it[0][0], it[0][1], it[1][1], it[1][2], it[1][3]] } // dbid, db, set, sample, file
-  .view()
   .set { mzml_msgf }
 
 
