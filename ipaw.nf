@@ -1053,6 +1053,9 @@ process mapVariantPeptidesToGenome {
   python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input saavpeps --output setsaavs
   ${params.saavheader ? "cat setsaavs <(grep -v ${params.saavheader} ${peptides} | sed \$'s/\$/\tNA/') > ${setname}_variant_peptides.txt" : "mv setsaavs ${setname}_variant_peptides.txt"}
   python3 /pgpython/map_cosmic_snp_tohg19.py --input ${setname}_variant_peptides.txt --output ${setname}_variant_peptides.saav.pep.hg19cor.vcf --cosmic_input $cosmic --dbsnp_input $dbsnp
+  # Remove PSM-table specific stuff (RT, precursor, etc etc) from variant PEPTIDE table
+  cut -f 1,2,14-5000 ${setname}_variant_peptides.txt > pepsfix
+  mv pepsfix ${setname}_variant_peptides.txt
   """
 }
 
@@ -1060,6 +1063,11 @@ novpeps_finished
   .concat(varpeps_finished) 
   .groupTuple()
   .set { setmerge_peps }
+
+
+accession_keymap = ['var': 'Peptide sequence', 'nov': 'Mod.peptide']
+acc_removemap = ['nov': 'Peptide', 'var': 'Mod.peptide']
+
 
 process mergeSetPeptidetable {
   container 'ubuntu:latest'
@@ -1072,10 +1080,35 @@ process mergeSetPeptidetable {
   file "${peptype}_peptidetable.txt" into produced_peptables
 
   """
-  paste <(head -n1 peps1) <(echo Setname) > ${peptype}_peptidetable.txt
-  count=1;for setn in ${setnames.join(' ')}; do paste <(tail -n+2 peps\$count) <(yes \$setn|head -n \$(tail -n+2 peps\$count|wc -l)) >> ${peptype}_peptidetable.txt;((count++));done
+  # build non-changing fields (seq based fields) table:
+  fixfields=`head -n1 peps1 |tr -s '\\t' '\\n' | egrep -vn '(Setname|Spectrum|q-val|plex|${acc_removemap[peptype]})' | cut -f 1 -d ':'`
+  fixfields=`echo \$fixfields | sed 's/ /,/g'`
+  head -n1 peps1 | cut -f `echo \$fixfields` > fixheader
+  count=1; for setn in ${setnames.join(' ')} ; do
+    cut -f `echo \$fixfields` peps\$count | tail -n+2 >> fixpeps
+    sort -u fixpeps > tmpp
+    mv tmpp fixpeps
+    ((count++))
+  done
+  ## Build changing fields table
+  touch peptable
+  count=1; for setn in ${setnames.join(' ')}; do
+    varfields=`head -n1 peps\$count |tr -s '\\t' '\\n' | egrep -n '(${accession_keymap[peptype]}|Spectrum|q-val|plex)' | cut -f 1 -d ':'`
+    varfields=`echo \$varfields| sed 's/ /,/g'`
+    # first add to header, cut from f2 to remove join-key pep seq field
+    head -n1 peps\$count | cut -f `echo \$varfields` | cut -f 2-5000| sed "s/^\\(\\w\\)/\${setn}_\\1/;s/\\(\\s\\)/\\1\${setn}_/g" > varhead
+    paste fixheader varhead > newheader
+    # then join the values
+    tail -n+2 peps\$count | cut -f `echo \$varfields` | sort -k1b,1 > sortpep; join peptable sortpep -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined
+    mv joined peptable
+    ((count++))
+  done
+  join fixpeps peptable -a1 -a2 -o auto -e 'NA' -t \$'\\t' > fixvarpeps
+  cat newheader fixvarpeps > ${peptype}_peptidetable.txt
   """
 }
+
+
 produced_psmtables
   .concat(produced_peptables)
   .subscribe { println "Pipeline output ready: ${it}" }
