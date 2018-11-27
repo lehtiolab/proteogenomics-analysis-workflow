@@ -1061,7 +1061,7 @@ acc_removemap = ['nov': 'Peptide', 'var': 'Mod.peptide']
 
 
 process mergeSetPeptidetable {
-  container 'ubuntu:latest'
+
   container 'pgpython'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
