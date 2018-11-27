@@ -937,12 +937,13 @@ ns_snp_out
 process combineResults{
   
   container 'pgpython'
-
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true
+  
   input:
   set val(setname), file(a), file(b), file(c), file(d), file(e), file(f), file(g), file(h) from combined_novel
   
   output:
-  set val(setname), file('combined') into combined_novelpep_output
+  set val('nov'), val(setname), file("${setname}_novel_peptides.txt") into novpeps_finished 
   
   script:
   if (!params.bamfiles)
@@ -954,8 +955,8 @@ process combineResults{
   join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
   join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
   join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
-  grep '^Peptide' joined6 > combined
-  grep -v '^Peptide' joined6 >> combined
+  grep '^Peptide' joined6 > ${setname}_novel_peptides.txt
+  grep -v '^Peptide' joined6 >> ${setname}_novel_peptides.txt
   """
 
   else
@@ -968,24 +969,8 @@ process combineResults{
   join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
   join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
   join joined6 $h -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined7
-  grep '^Peptide' joined7 > combined
-  grep -v '^Peptide' joined7 >> combined
-  """
-}
-
-
-process addLociNovelPeptides{
-  
-  container 'pgpython'
-
-  input:
-  set val(setname), file(x) from combined_novelpep_output
-  
-  output:
-  set val('nov'), val(setname), file("${setname}_novel_peptides.txt") into novpeps_finished
-  
-  """
-  python3 /pgpython/group_novpepToLoci.py  --input $x --output ${setname}_novel_peptides.txt --distance 10kb
+  grep '^Peptide' joined7 > ${setname}_novel_peptides.txt
+  grep -v '^Peptide' joined7 >> ${setname}_novel_peptides.txt
   """
 }
 
@@ -1077,6 +1062,7 @@ acc_removemap = ['nov': 'Peptide', 'var': 'Mod.peptide']
 
 process mergeSetPeptidetable {
   container 'ubuntu:latest'
+  container 'pgpython'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
@@ -1090,27 +1076,35 @@ process mergeSetPeptidetable {
   fixfields=`head -n1 peps1 |tr -s '\\t' '\\n' | egrep -vn '(Setname|Spectrum|q-val|plex|${acc_removemap[peptype]})' | cut -f 1 -d ':'`
   fixfields=`echo \$fixfields | sed 's/ /,/g'`
   head -n1 peps1 | cut -f `echo \$fixfields` > fixheader
-  count=1; for setn in ${setnames.join(' ')} ; do
-    cut -f `echo \$fixfields` peps\$count | tail -n+2 >> fixpeps
-    sort -u fixpeps > tmpp
-    mv tmpp fixpeps
-    ((count++))
+  count=1; for setn in ${setnames.sort().join(' ')} ; do
+  cut -f  echo \$fixfields peps\$count | tail -n+2 >> fixpeps
+  ((count++))
   done
+  if [ ${peptype} == 'nov' ]
+  then
+     cat fixheader <(sort -u -k1b,1 fixpeps) > temp
+     python3 /pgpython/group_novpepToLoci.py  --input temp --output temp.loci --distance 10kb
+     head -n1 temp.loci > fixheader
+     tail -n+2 temp.loci > fixpeps
+  fi
+  sort -u -k1b,1 fixpeps > temp
+  mv temp fixpeps
+
   ## Build changing fields table
   touch peptable
-  count=1; for setn in ${setnames.join(' ')}; do
+  count=1; for setn in ${setnames.sort().join(' ')}; do
     varfields=`head -n1 peps\$count |tr -s '\\t' '\\n' | egrep -n '(${accession_keymap[peptype]}|Spectrum|q-val|plex)' | cut -f 1 -d ':'`
     varfields=`echo \$varfields| sed 's/ /,/g'`
     # first add to header, cut from f2 to remove join-key pep seq field
     head -n1 peps\$count | cut -f `echo \$varfields` | cut -f 2-5000| sed "s/^\\(\\w\\)/\${setn}_\\1/;s/\\(\\s\\)/\\1\${setn}_/g" > varhead
-    paste fixheader varhead > newheader
+    paste fixheader varhead > newheader && mv newheader fixheader
     # then join the values
     tail -n+2 peps\$count | cut -f `echo \$varfields` | sort -k1b,1 > sortpep; join peptable sortpep -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined
     mv joined peptable
     ((count++))
   done
   join fixpeps peptable -a1 -a2 -o auto -e 'NA' -t \$'\\t' > fixvarpeps
-  cat newheader fixvarpeps > ${peptype}_peptidetable.txt
+  cat fixheader fixvarpeps > ${peptype}_peptidetable.txt
   """
 }
 
