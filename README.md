@@ -24,7 +24,7 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
   + Database search related inputs for MSGFplus
     + Spectra files input
     
-    `--mzmldef  # a tab deliminated text file with mzmlfilepath setname`
+    `--mzmldef  # a tab deliminated text file with mzmlfilepath(absolute path) and setname`
  
     + Modification file for MSGF+. Default file is for TMT labelled samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
     
@@ -79,11 +79,11 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     `--bamfiles /path/to/\*.bam  # mind the backslash`
   
   + Nextflow command option:
-    + Use `-profile` option to define to run it in locally or submit it in slurm or sge system.
-   ```
-   -profile ## options are standard and testing. Names of different options and cpus allocated can be re-defined in nextflow.config file.
-   -resume  ## use it to resume the jobs from the last stopped process.
-   ```
+    + Use `-profile` option to run it in locally or submit it in slurm or sge system.
+    ```
+    -profile ## options are standard and testing. Options and cpus allocated can be re-defined in nextflow.config file.
+    -resume  ## use it to resume the jobs from the last stopped process.
+    ```
   + Nextflow configuration
     + Define CPU resources for specific processes in `configuration/base.config`
    
