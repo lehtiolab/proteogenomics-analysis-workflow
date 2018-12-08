@@ -21,55 +21,61 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
 
 ### Pipeline inputs
 
-  + mzML files containing MS data
-  
-    `--mzmls /path/to/\*.mzML  # mind the backslash before *`
-    + Modification file for MSGF+. Default file is for TMT samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
-    
+  + Database search related inputs for MSGFplus
+    + Spectra files input
+    `--mzmldef  # a tab deliminated text file with mzmlfilepath setname`
+ 
+    + Modification file for MSGF+. Default file is for TMT labelled samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
     `--mods Mods.txt # use standard Unimod name for modification`
-  + __Optional__: BAM and BAI files (in same directory) from RNASeq experiment
-  
-    `--bamfiles /path/to/\*.bam  # mind the backslash`
-  + FASTA and GTF of VarDB
+    
+    + Fragment method
+    `--activation hcd  # default else use cid, etd`
+    
+    + Specify search DB
+    `--tdb /path/to/vardb.fa`
+    
+  + Quantification related inputs
+    + Labelling method. Do Not use this option if you have label-free data
+    `--isobaric tmt10plex # tmt6plex, tmt2plex, itraq8plex, itraq4plex`
+    
+    + Reference channel to calculate relative peptide intensities
+    `--denoms 'set01:130C:131' # if multiple channels specified, the average of them is used as reference channel`
+    `--denoms 'set01:126 set02:131' # different sets seperated by space, the set names need to match --mzmldef input`
 
-    `--tdb /path/to/vardb.fa --gtf /path/tovardb.gtf`
+  + Post-search processing inputs
+    + map the genomic positions of VarDB peptides require the annotation GTF file of VarDB
+    `--gtf /path/tovardb.gtf`   
 
-  + Canonical protein FASTA for catching canonical proteins and BLAST
-  
-     ```
-    --blastdb /path/to/Uniprot.Ensembl.RefSeq.GENCODE.proteins.fa
-    --knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa
+    + Canonical protein FASTA for catching canonical proteins and BLAST
     ```
-
-  + SNP and COSMIC databases
-  
+    --blastdb /path/to/Uniprot.Ensembl.GENCODE.proteins.fa # Here we use latest uniprot, ensembl, gencode annotated protein sequences 
+    --knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa # a prefiltering known proteins DB needed to remove known peptides during class FDR calculation 
     ```
-    --snpfa /path/to/SNPdb.fa  # a fasta file containing peptide sequences derived from known nsSNPs
+   
+    + Mark novel peptides which can be explained by nsSNPs
+    `--snpfa /path/to/MSCanProVar_ensemblV79.fa  # CanProVar annotated peptide sequences derived from known nsSNPs`   
+    
+    + Genome FASTA to BLAT against to find potential peptides mapped to multiple genomic locations
+    `--genome /path/to/hg19.fa` # use hg19.fa.masked version if you don't want to consider repeated regions.
+
+    + SNP and COSMIC databases (to make it optional), required to map genomic positions of single amino acid variant peptides.
+    ```
     --dbsnp /path/to/SNP142CodingDbSnp.txt # a text file containing genomic coordinates of coding SNPs
     --cosmic /path/to/CosmicMutantExport.tsv # a text file containing genomic coordinates of mutations
     ```
-
-  + Genome Masked FASTA to BLAT against
-
-    `--genome /path/to/hg19.fa.masked`
-  + Isobaric quantification type used and activation (leave out for no isobaric quant)
-
-    ```
-    # default is NO isobaric quant (label-free). Don't use this option unless for tmt10plex, tmt6plex, tmt2plex, itraq8plex, itraq4plex
-    --isobaric tmt10plex
-    --activation hcd  # default else use cid, etd
-    ```
-    + setting denominator for Isobaric quantification
     
-    `--denoms # default is TMT tag 126 used as denominator`
-    + setting different denominators for different sets. When running multiple iTRAQ or TMT experiments, different tags can be used as denominator.
-    In this case you have to combine `--mzmldef` ,  `--denoms` to define the setname, and corresponding denominators in each set.
-    
-     ```
-     --mzmldef  # a tab deliminated text file with mzmlfilepath\tsetname
-     --denoms 'set1:126:128N set2:131 set3:129N:130C:131' # different sets seperated by space
-    ```
-    
+    + __Optional__: RNA-Seq BAM and BAI files (in same directory) ro search for reads support in detected novel coding regions. 
+    `--bamfiles /path/to/\*.bam  # mind the backslash`
+  
+  + Nextflow command option:
+    + Use -profile option to define to run it in locally or submit it in slurm or sge system.
+   ```
+   -profile ## options are standard and testing. Names of different options and cpus allocated can be re-defined in nextflow.config file.
+   -resume  ## use it to resume the jobs from the last stopped process.
+   ```
+  + Nextflow configuration
+    + Define CPU resources for specific processes in configuration/base.config
+   
 
 ### Prepare once
 
@@ -123,21 +129,21 @@ Example command to search TMT 10-plex labelled data.
 Remove  `--isobaric tmt10plex`  if you have label-free data.
 ```
 nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \ 
-  --mzmls /path/to/\*.mzML --gtf /path/to/VarDB.gtf \
-  --mods /path/to/mods.txt \
+  --mzmldef spectra_file_list.txt \
+  --activation hcd \
+  --isobaric tmt10plex \
+  --denoms 'set01:131 set02:131 set03:131' \
+  --gtf /path/to/VarDB.gtf \
+  --mods /path/to/tmt_mods.txt \
   --knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa \
-  --blastdb /path/to/UniProteome+Ensembl87+refseq+GENCODE24.proteins.fasta \
+  --blastdb /path/to/UniProteome+Ensembl94+GENCODE24.proteins.fasta \
   --cosmic /path/to/CosmicMutantExport.tsv \
   --snpfa /path/to/MSCanProVar_ensemblV79.filtered.fasta \
-  --genome /path/to/hg19.chr1-22.X.Y.M.fa.masked \
+  --genome /path/to/hg19.chr1-22.X.Y.M.fa \
   --dbsnp /path/to/snp142CodingDbSnp.txt \
   --bamfiles /path/to/\*.bam --isobaric tmt10plex \
   --outdir /path/to/results
   -profile testing
 ```
 
-Nextflow command option:
-```
--profile ## options are standard and testing. standard uses slurm system to queue the jobs. testing allocates 20 cores/cpus to run the command. The number of cores used in testing can be changed by editing the nextflow.config file.
--resume  ## use it to resume the jobs from the last stopped process.
-```
+
