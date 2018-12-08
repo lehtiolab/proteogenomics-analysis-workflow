@@ -23,27 +23,35 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
 
   + Database search related inputs for MSGFplus
     + Spectra files input
+    
     `--mzmldef  # a tab deliminated text file with mzmlfilepath setname`
  
     + Modification file for MSGF+. Default file is for TMT labelled samples. [Here is an example.](https://bix-lab.ucsd.edu/download/attachments/13533355/Mods.txt?version=2&modificationDate=1358975546000)
+    
     `--mods Mods.txt # use standard Unimod name for modification`
     
     + Fragment method
+    
     `--activation hcd  # default else use cid, etd`
     
     + Specify search DB
+    
     `--tdb /path/to/vardb.fa`
     
   + Quantification related inputs
     + Labelling method. Do Not use this option if you have label-free data
+    
     `--isobaric tmt10plex # tmt6plex, tmt2plex, itraq8plex, itraq4plex`
     
     + Reference channel to calculate relative peptide intensities
+    
     `--denoms 'set01:130C:131' # if multiple channels specified, the average of them is used as reference channel`
     `--denoms 'set01:126 set02:131' # different sets seperated by space, the set names need to match --mzmldef input`
 
   + Post-search processing inputs
+  
     + map the genomic positions of VarDB peptides require the annotation GTF file of VarDB
+    
     `--gtf /path/tovardb.gtf`   
 
     + Canonical protein FASTA for catching canonical proteins and BLAST
@@ -53,9 +61,11 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     ```
    
     + Mark novel peptides which can be explained by nsSNPs
+    
     `--snpfa /path/to/MSCanProVar_ensemblV79.fa  # CanProVar annotated peptide sequences derived from known nsSNPs`   
     
     + Genome FASTA to BLAT against to find potential peptides mapped to multiple genomic locations
+    
     `--genome /path/to/hg19.fa` # use hg19.fa.masked version if you don't want to consider repeated regions.
 
     + SNP and COSMIC databases (to make it optional), required to map genomic positions of single amino acid variant peptides.
@@ -65,16 +75,17 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     ```
     
     + __Optional__: RNA-Seq BAM and BAI files (in same directory) ro search for reads support in detected novel coding regions. 
+    
     `--bamfiles /path/to/\*.bam  # mind the backslash`
   
   + Nextflow command option:
-    + Use -profile option to define to run it in locally or submit it in slurm or sge system.
+    + Use `-profile` option to define to run it in locally or submit it in slurm or sge system.
    ```
    -profile ## options are standard and testing. Names of different options and cpus allocated can be re-defined in nextflow.config file.
    -resume  ## use it to resume the jobs from the last stopped process.
    ```
   + Nextflow configuration
-    + Define CPU resources for specific processes in configuration/base.config
+    + Define CPU resources for specific processes in `configuration/base.config`
    
 
 ### Prepare once
