@@ -1076,8 +1076,8 @@ process mergeSetPeptidetable {
   fixfields=`head -n1 peps1 |tr -s '\\t' '\\n' | egrep -vn '(Setname|Spectrum|q-val|plex|${acc_removemap[peptype]})' | cut -f 1 -d ':'`
   fixfields=`echo \$fixfields | sed 's/ /,/g'`
   head -n1 peps1 | cut -f `echo \$fixfields` > fixheader
-  count=1; for setn in ${setnames.sort().join(' ')} ; do
-  cut -f  echo \$fixfields peps\$count | tail -n+2 >> fixpeps
+  count=1; for setn in ${setnames.join(' ')} ; do
+  cut -f  `echo \$fixfields` peps\$count | tail -n+2 >> fixpeps
   ((count++))
   done
   if [ ${peptype} == 'nov' ]
@@ -1092,7 +1092,7 @@ process mergeSetPeptidetable {
 
   ## Build changing fields table
   touch peptable
-  count=1; for setn in ${setnames.sort().join(' ')}; do
+  count=1; for setn in ${setnames.join(' ')}; do
     varfields=`head -n1 peps\$count |tr -s '\\t' '\\n' | egrep -n '(${accession_keymap[peptype]}|Spectrum|q-val|plex)' | cut -f 1 -d ':'`
     varfields=`echo \$varfields| sed 's/ /,/g'`
     # first add to header, cut from f2 to remove join-key pep seq field
