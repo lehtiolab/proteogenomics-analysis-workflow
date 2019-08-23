@@ -662,7 +662,7 @@ process createFastaBedGFF {
   set val(setname), file('novpep_perco_quant.txt') into novelpep_percoquant
  
   """
-  python3 /pgpython/map_novelpeptide2genome.py --input $psms --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out ${setname}_novel_peptides.gff3 --bed_out novel_peptides.bed
+  map_novelpeptide2genome.py --input $psms --gtf $gtffile --fastadb $tdb --tab_out novel_peptides.tab.txt --fasta_out novel_peptides.fa --gff3_out ${setname}_novel_peptides.gff3 --bed_out novel_peptides.bed
   sort -k 1b,1 <(tail -n+2 $peptides) |cut -f 1,14-500 > peptable_sorted
   sort -k 2b,2 <(tail -n+2 novel_peptides.tab.txt) > novpep_sorted
   paste <(cut -f 2 novpep_sorted) <(cut -f1,3-500 novpep_sorted) > novpep_pepcols
@@ -713,8 +713,8 @@ process ParseBlastpOut {
  set val(setname), file('single_mismatch_novpeps.txt') into novpeps_singlemis
 
  """
- python3 /pgpython/parse_BLASTP_out.py --input $novelpep --blastp_result $novelblast --fasta $blastdb --output peptable_blastp.txt
- python3 /pgpython/extract_1mismatch_novpsm.py peptable_blastp.txt $psms single_mismatch_novpeps.txt
+ parse_BLASTP_out.py --input $novelpep --blastp_result $novelblast --fasta $blastdb --output peptable_blastp.txt
+ extract_1mismatch_novpsm.py peptable_blastp.txt $psms single_mismatch_novpeps.txt
  """
 
 }
@@ -760,7 +760,7 @@ process novpepSpecAIOutParse {
   set val(setname), file('novpep_specai.txt') into novpep_singlemisspecai
 
   """
-  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_sa
+  parse_spectrumAI_out.py --spectrumAI_out $x --input peptide_table.txt --output novpep_sa
   cut -f 1,8-19 novpep_sa > novpep_specai.txt
   """
 }
@@ -795,7 +795,7 @@ process parseBLATout {
  set val(setname), file('peptable_blat.txt') into peptable_blat
 
  """
- python3 /pgpython/parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
+ parse_BLAT_out.py $novelblat $novelpep peptable_blat.txt
 
  """
 }
@@ -812,7 +812,7 @@ process labelnsSNP {
   set val(setname), file('nssnp.txt') into ns_snp_out
 
   """
-  python3 /pgpython/label_nsSNP_pep.py --input $peptable --nsSNPdb $snpfa --output nssnp.txt
+  label_nsSNP_pep.py --input $peptable --nsSNPdb $snpfa --output nssnp.txt
   """
 }
 
@@ -828,7 +828,7 @@ process phastcons {
   set val(setname), file ('phastcons.txt') into phastcons_out
 
   """
-  python3 /pgpython/calculate_phastcons.py $novelgff /bigwigs/hg19.100way.phastCons.bw phastcons.txt
+  calculate_phastcons.py $novelgff /bigwigs/hg19.100way.phastCons.bw phastcons.txt
   """
 }
 
@@ -843,7 +843,7 @@ process phyloCSF {
   set val(setname), file('phylocsf.txt') into phylocsf_out
 
   """
-  python3 /pgpython/calculate_phylocsf.py $novelgff /bigwigs phylocsf.txt
+  calculate_phylocsf.py $novelgff /bigwigs phylocsf.txt
   """
 
 }
@@ -873,7 +873,7 @@ process scanBams {
 
   """
   ls *.bam > bamfiles.txt
-  python3 /pgpython/scan_bams.py  --gff_input $gff --bam_files bamfiles.txt --output scannedbams.txt
+  scan_bams.py  --gff_input $gff --bam_files bamfiles.txt --output scannedbams.txt
   """
 }
 
@@ -909,7 +909,7 @@ process parseAnnovarOut {
   set val(setname), file('parsed_annovar.txt') into annovar_parsed
 
   """
-  python3 /pgpython/parse_annovar_out.py --input $novelpep --output parsed_annovar.txt --annovar_out $anno 
+  parse_annovar_out.py --input $novelpep --output parsed_annovar.txt --annovar_out $anno 
   """
 }
 
@@ -988,11 +988,11 @@ process prepSpectrumAI {
   if (params.saavheader)
   """
   cat <(head -n1 $psms) <(grep $params.saavheader $psms) > saavpsms
-  python3 /pgpython/label_sub_pos.py --input_psm saavpsms --output specai_in.txt ${params.splitchar ? "--splitchar ${params.splitchar}" : ''}
+  label_sub_pos.py --input_psm saavpsms --output specai_in.txt ${params.splitchar ? "--splitchar ${params.splitchar}" : ''}
   """
   else
   """
-  python3 /pgpython/label_sub_pos.py --input_psm $psms --output specai_in.txt
+  label_sub_pos.py --input_psm $psms --output specai_in.txt
   """
 }
 
@@ -1041,9 +1041,9 @@ process mapVariantPeptidesToGenome {
 
   """
   ${params.saavheader ? "cat <(head -n1 ${peptides}) <(grep ${params.saavheader} ${peptides}) > saavpeps" : "mv ${peptides} saavpeps" }
-  python3 /pgpython/parse_spectrumAI_out.py --spectrumAI_out $x --input saavpeps --output setsaavs
+  parse_spectrumAI_out.py --spectrumAI_out $x --input saavpeps --output setsaavs
   ${params.saavheader ? "cat setsaavs <(grep -v ${params.saavheader} ${peptides} | sed \$'s/\$/\tNA/') > ${setname}_variant_peptides.txt" : "mv setsaavs ${setname}_variant_peptides.txt"}
-  python3 /pgpython/map_cosmic_snp_tohg19.py --input ${setname}_variant_peptides.txt --output ${setname}_variant_peptides.saav.pep.hg19cor.vcf --cosmic_input $cosmic --dbsnp_input $dbsnp
+  map_cosmic_snp_tohg19.py --input ${setname}_variant_peptides.txt --output ${setname}_variant_peptides.saav.pep.hg19cor.vcf --cosmic_input $cosmic --dbsnp_input $dbsnp
   # Remove PSM-table specific stuff (RT, precursor, etc etc) from variant PEPTIDE table
   cut -f 1,2,14-5000 ${setname}_variant_peptides.txt > pepsfix
   mv pepsfix ${setname}_variant_peptides.txt
@@ -1083,7 +1083,7 @@ process mergeSetPeptidetable {
   if [ ${peptype} == 'nov' ]
   then
      cat fixheader <(sort -u -k1b,1 fixpeps) > temp
-     python3 /pgpython/group_novpepToLoci.py  --input temp --output temp.loci --distance 10kb
+     group_novpepToLoci.py  --input temp --output temp.loci --distance 10kb
      head -n1 temp.loci > fixheader
      tail -n+2 temp.loci > fixpeps
   fi
