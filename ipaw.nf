@@ -368,9 +368,11 @@ process msgfPlus {
   set val(setname), val(sample), file("${sample}.mzid") into mzids
   set val(setname), file("${sample}.mzid"), file('out.mzid.tsv') into mzidtsvs
   
+  script:
+  multiplier = params.pisepdb ? 2 : 1
   """
-  fs=`du -Lk $db|cut -f1`
-  msgf_plus -Xmx\$((\$fs*8/1024))M -d $db -s $x -o "${sample}.mzid" -thread 12 -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
+  mem=\$(( \$(du -Lk $db|cut -f1) * 8 / 1024 * $multiplier ))
+  msgf_plus -Xmx\$(( mem < 4096 ? 4096 : \$mem))M -d $db -s $x -o "${sample}.mzid" -thread 12 -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i "${sample}.mzid" -o out.mzid.tsv
   rm ${db.baseName.replaceFirst(/\.fasta/, "")}.c*
   """
