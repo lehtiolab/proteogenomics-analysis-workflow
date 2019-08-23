@@ -32,16 +32,20 @@ params.novheaders = '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc'
 params.varheaders = '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
 params.saavheader = false
 params.noclassfdr = false
+params.dbsnp = false
+params.cosmic = false
+params.normalpsms = false
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
 gtffile = file(params.gtf)
 snpfa = file(params.snpfa)
-dbsnp = file(params.dbsnp)
-cosmic = file(params.cosmic)
+dbsnp = params.dbsnp ? file(params.dbsnp) : false
+cosmic = params.cosmic ? file(params.cosmic) : false
 genomefa = file(params.genome)
 tdb = file(params.tdb)
+normalpsms = params.normalpsms ? file(params.normalpsms) : false
 
 activations = [hcd:'High-energy collision-induced dissociation', cid:'Collision-induced dissociation', etd:'Electron transfer dissociation']
 activationtype = activations[params.activation]
@@ -115,7 +119,7 @@ if (params.isobaric && params.denoms) {
 if (params.pisepdb) {
   sets_for_six
     .toList()
-    .map { it -> [it, file(params.normalpsms)]}
+    .map { it -> [it, normalpsms]}
     .set { normpsms }
 } else {
   sets_for_six.set{ normpsms }
@@ -652,7 +656,7 @@ process createFastaBedGFF {
   input:
   set val(setname), val(peptype), file(peptides) , val(psmtype), file(psms) from novelFaBdGfPep
   file gtffile
-  file tdb
+  file tdb from tdb
  
   output:
   set val(setname), file('novel_peptides.fa') into novelfasta
