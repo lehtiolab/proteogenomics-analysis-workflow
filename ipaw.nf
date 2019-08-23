@@ -60,7 +60,6 @@ varheaders = params.varheaders == true ? false : params.varheaders
 ///////////////////
 // FOR 6FT SPLIT DATABASES
 pipeptides = params.pisepdb ? file(params.pisepdb) : false
-splitscript = file('scripts/pi_database_splitter.py')
 //////////////////
 
 /* PIPELINE START */
@@ -183,7 +182,6 @@ process create6FTDB {
   input:
   set val(setname), val(stripname), file(peptides) from setplatepeptides
   file pipeptides
-  file splitscript
 
   output:
   set val(setname), val(stripname), file('target_fr*.fasta') into t_splitdb
@@ -191,7 +189,7 @@ process create6FTDB {
   script:
   strip = params.strips[stripname]
   """
-  python3 $splitscript -i $pipeptides -p $peptides --intercept $strip.intercept --width $strip.fr_width --tolerance $strip.tolerance --amount $strip.fr_amount  ${strip.reverse ? '--reverse' : ''} --deltacolpattern Delta --fdrcolpattern '^q-value' --picutoff 0.2 --fdrcutoff 0.0 --maxlen 50 --minlen 8
+  pi_database_splitter.py -i $pipeptides -p $peptides --intercept $strip.intercept --width $strip.fr_width --tolerance $strip.tolerance --amount $strip.fr_amount  ${strip.reverse ? '--reverse' : ''} --deltacolpattern Delta --fdrcolpattern '^q-value' --picutoff 0.2 --fdrcutoff 0.0 --maxlen 50 --minlen 8
   """
 }
 
