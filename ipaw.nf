@@ -36,10 +36,13 @@ params.saavheader = false
 params.noclassfdr = false
 params.dbsnp = false
 params.cosmic = false
+params.pisepdb = false
+params.mzmldef = false
+params.denoms = false
 params.normalpsms = false
 params.annovar_dir = false
 params.bigwigs = false
-param.splitchar = false
+params.splitchar = false
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)

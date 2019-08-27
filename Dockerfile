@@ -1,10 +1,8 @@
 FROM nfcore/base
 LABEL description="Docker image containing all requirements for IPAW pipeline"
 
-COPY environment.yml /
 COPY envs /envs/
-
-RUN conda env create -f /environment.yml && conda clean -a
+RUN conda env create -f /envs/environment.yml && conda clean -a
 RUN conda env create -f /envs/openms_blat.yml && conda clean -a
 
 RUN git clone https://github.com/yafeng/SpectrumAI /SpectrumAI
