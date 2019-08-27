@@ -1,6 +1,11 @@
 Integrated proteogenomics analysis workflow
 ==============
 
+[![Nextflow](https://img.shields.io/badge/nextflow-%E2%89%A50.32.0-brightgreen.svg)](https://www.nextflow.io/)
+
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg)](http://bioconda.github.io/)
+[![Docker](https://img.shields.io/docker/automated/glormph/ipaw.svg)](https://hub.docker.com/r/glormph/ipaw)
+
 This is a workflow to identify, curate, and validate variant and novel peptides from MS proteomics spectra data, using the VarDB database. VarDB combines entries from COSMIC, PGOHUM, CanProVar and lncipedia. The pipeline takes mzML spectra files as input. The workflow is powered by [Nextflow](https://nextflow.io) and runs in [Docker](https://docker.com) containers.
 
 Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on a concatenated target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation.
