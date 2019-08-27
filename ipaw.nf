@@ -130,7 +130,6 @@ if (params.pisepdb) {
 
 process splitSetNormalSearchPsms {
   //  normal search psm table, split on set col, collect files
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   when: params.pisepdb
   input:
@@ -149,7 +148,6 @@ setnormpsms
 
 process splitPlateNormalSearchPsms {
   // create pep tables, split on plate, collect
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   when: params.pisepdb
   input:
@@ -167,7 +165,6 @@ setplatepsms
 
 process normalSearchPsmsToPeptides {
   // create pep tables, split on plate, collect
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   when: params.pisepdb
   input:
@@ -184,7 +181,6 @@ process create6FTDB {
   // create 6FT DB per peptable-plate, collect fr 
 
   when: params.pisepdb
-  container 'biopython/biopython'
 
   input:
   set val(setname), val(stripname), file(peptides) from setplatepeptides
@@ -214,8 +210,6 @@ if (params.pisepdb) {
 
 process concatFasta {
  
-  container 'ubuntu:latest'
-
   input:
   set val(dbid), file(db) from db_w_id 
   file knownproteins
@@ -231,7 +225,6 @@ process concatFasta {
 
 
 process makeDecoyReverseDB {
-  container 'biopython/biopython'
 
   input:
   set val(dbid), file(db) from targetdb
@@ -270,8 +263,6 @@ concatdb
 
 process makeProtSeq {
 
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-
   input:
   file knownproteins
 
@@ -284,8 +275,6 @@ process makeProtSeq {
 }
 
 process makeTrypSeq {
-
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
   file knownproteins
@@ -301,8 +290,6 @@ process makeTrypSeq {
 
 process IsobaricQuant {
 
-  container 'quay.io/biocontainers/openms:2.2.0--py27_boost1.64_0'
-
   when: params.isobaric
 
   input:
@@ -312,6 +299,7 @@ process IsobaricQuant {
   set val(sample), file("${infile}.consensusXML") into isobaricxml
 
   """
+  source activate openms-blat-2.4.0
   IsobaricAnalyzer  -type $params.isobaric -in $infile -out "${infile}.consensusXML" -extraction:select_activation "$activationtype" -extraction:reporter_mass_shift $massshift -extraction:min_precursor_intensity 1.0 -extraction:keep_unannotated_precursor true -quantification:isotope_correction true 
   """
 }
@@ -337,8 +325,6 @@ mzmlfiles
 
 process createSpectraLookup {
 
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-
   input:
   file(isobxmls) from sorted_isoxml 
   set val(setnames), file(mzmlfiles) from mzmlfiles_all
@@ -361,11 +347,8 @@ process createSpectraLookup {
 
 process msgfPlus {
 
-  // Latest version has problems when converting to TSV, possible too long identifiers 
-  // So we use an older version
-  // LATEST TESTED: container 'quay.io/biocontainers/msgf_plus:2017.07.21--py27_0'
-
-  container 'quay.io/biocontainers/msgf_plus:2016.10.26--py27_1'
+  // Some versions have problems when converting to TSV, possible too long identifiers 
+  // If problems arise, try to use an older version: msgf_plus:2016.10.26--py27_1
 
   input:
   set val(setfr_id), file(db), val(setname), val(sample), file(x) from mzml_msgf
@@ -392,8 +375,6 @@ mzids
 
 process percolator {
 
-  container 'quay.io/biocontainers/percolator:3.1--boost_1.623'
-
   input:
   set val(setname), val(samples), file('mzid?') from mzids_2pin
 
@@ -417,8 +398,6 @@ percolated
 
 process getVariantPercolator {
 
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-  
   when: varheaders
 
   input:
@@ -433,8 +412,6 @@ process getVariantPercolator {
 
 
 process getNovelPercolator {
-
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   when: novheaders
 
@@ -455,7 +432,6 @@ nov_perco
 
 
 process filterPercolator {
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
   set val(setname), val(peptype), file(perco) from splitperco
@@ -495,8 +471,6 @@ variantmzidtsv
   .set { allmzperco }
 
 process svmToTSV {
-
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
 
   input:
   set val(setname), file('mzident?'), file('mzidtsv?'), val(peptype), file(perco) from allmzperco 
@@ -561,8 +535,6 @@ mzidtsv_perco
 
 process createPSMTables {
 
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-  
   input:
   set val(setname), val(peptype), file('psms'), file('lookup') from prepsm
 
@@ -605,7 +577,6 @@ setmergepsmtables
 
 
 process mergeSetPSMtable {
-  container 'ubuntu:latest'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
@@ -623,8 +594,6 @@ process mergeSetPSMtable {
 
 process prePeptideTable {
 
-  container 'quay.io/biocontainers/msstitch:2.5--py36_0'
-  
   input:
   set val(setname), val(peptype), file('psms?') from peppsms 
 
@@ -652,7 +621,6 @@ novelprepep
   .set { novelFaBdGfPep }
 
 process createFastaBedGFF {
-  container 'pgpython'
  
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "${setname}_novel_peptides.gff3" ? "${setname}_novel_peptides.gff3" : null}
  
@@ -687,8 +655,6 @@ novelfasta
 
 process BlastPNovel {
 
-  container 'quay.io/biocontainers/blast:2.7.1--boost1.64_1'
-
   input:
   set val(setname), file(novelfasta) from blastnovelfasta
   file blastdb
@@ -709,7 +675,6 @@ novelpsms_specai
   .set { novelblastout }
 
 process ParseBlastpOut {
- container 'pgpython'
  
  input:
  set val(setname), file(psms), file(novelpep), file(novelblast) from novelblastout
@@ -735,7 +700,6 @@ groupset_mzmls
   
 
 process ValidateSingleMismatchNovpeps {
-  container 'spectrumai'
   
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "precursorError.histogram.plot.pdf" ? "${setname}_novel_precursorError_plot.pdf" : it }
   
@@ -758,7 +722,6 @@ singlemis_specai
   .set { nov_specaiparse }
 
 process novpepSpecAIOutParse {
-  container 'pgpython'
 
   input:
   set val(setname), file(x), file('peptide_table.txt') from nov_specaiparse
@@ -774,7 +737,6 @@ process novpepSpecAIOutParse {
 
 
 process BLATNovel {
-  container 'quay.io/biocontainers/blat:35--1'
 
   input:
   set val(setname), file(novelfasta) from blatnovelfasta
@@ -784,6 +746,7 @@ process BLATNovel {
   set val(setname), file('blat_out.pslx') into novelblat
 
   """
+  source activate openms-blat-2.4.0
   blat $genomefa $novelfasta -t=dnax -q=prot -tileSize=5 -minIdentity=99 -out=pslx blat_out.pslx 
   """
 }
@@ -793,7 +756,6 @@ novelblat
   .set { novblatparse }
 
 process parseBLATout {
- container 'pgpython'
 
  input:
  set val(setname), file(novelblat), file(novelpep) from novblatparse
@@ -808,8 +770,6 @@ process parseBLATout {
 }
 
 process labelnsSNP {
-  
-  container 'pgpython'
   
   input:
   set val(setname), file(peptable) from snpnovelpep
@@ -827,7 +787,6 @@ novelGFF3
   .into { novelGFF3_phast; novelGFF3_phylo; novelGFF3_bams }
 
 process phastcons {
-  container 'pgpython'
   
   input:
   set val(setname), file(novelgff) from novelGFF3_phast
@@ -842,7 +801,6 @@ process phastcons {
 }
 
 process phyloCSF {
-  container 'pgpython'
   
   input:
   set val(setname), file(novelgff) from novelGFF3_phylo
@@ -869,7 +827,6 @@ if (params.bamfiles) {
 
 
 process scanBams {
-  container 'pgpython'
 
   when: params.bamfiles
 
@@ -909,8 +866,6 @@ annovar_out
 
 process parseAnnovarOut {
   
-  container 'pgpython'
-  
   input:
   set val(setname), file(anno), file(novelpep) from parseanno
 
@@ -945,7 +900,6 @@ ns_snp_out
 
 process combineResults{
   
-  container 'pgpython'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
   
   input:
@@ -985,8 +939,6 @@ process combineResults{
 
 process prepSpectrumAI {
 
-  container 'pgpython'
-  
   input:
   set val(setname), val(peptype), file(psms) from variantpsms
   
@@ -1011,7 +963,6 @@ var_specaimzmls
   .set { var_specai_inmzml }
 
 process SpectrumAI {
-  container 'spectrumai'
 
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "precursorError.histogram.plot.pdf" ? "${setname}_variant_precursorError_plot.pdf" : it }
 
@@ -1036,7 +987,6 @@ specai
 
 process mapVariantPeptidesToGenome {
 
-  container 'pgpython'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
@@ -1071,7 +1021,6 @@ acc_removemap = ['nov': 'Peptide', 'var': 'Mod.peptide']
 
 process mergeSetPeptidetable {
 
-  container 'pgpython'
   publishDir "${params.outdir}", mode: 'copy', overwrite: true
 
   input:
