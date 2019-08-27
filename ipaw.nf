@@ -35,6 +35,9 @@ params.noclassfdr = false
 params.dbsnp = false
 params.cosmic = false
 params.normalpsms = false
+params.annovar_dir = false
+params.bigwigs = false
+param.splitchar = false
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
@@ -828,26 +831,28 @@ process phastcons {
   
   input:
   set val(setname), file(novelgff) from novelGFF3_phast
+  file('bigwigs') from Channel.fromPath(params.bigwigs)
+
   output:
   set val(setname), file ('phastcons.txt') into phastcons_out
 
   """
-  calculate_phastcons.py $novelgff /bigwigs/hg19.100way.phastCons.bw phastcons.txt
+  calculate_phastcons.py $novelgff bigwigs/hg19.100way.phastCons.bw phastcons.txt
   """
 }
 
 process phyloCSF {
-  
   container 'pgpython'
-
+  
   input:
   set val(setname), file(novelgff) from novelGFF3_phylo
+  file('bigwigs') from Channel.fromPath(params.bigwigs)
 
   output:
   set val(setname), file('phylocsf.txt') into phylocsf_out
 
   """
-  calculate_phylocsf.py $novelgff /bigwigs phylocsf.txt
+  calculate_phylocsf.py $novelgff bigwigs phylocsf.txt
   """
 
 }
@@ -884,16 +889,16 @@ process scanBams {
 
 process annovar {
   
-  container 'annovar'
-  
   input:
   set val(setname), file(novelbed) from novelbed
+  file annovar from Channel.fromPath("$params.annovar_dir/annotate_variation.pl")
+  file ("humandb") from Channel.fromPath("$params.annovar_dir/humandb/")
 
   output:
   set val(setname), file('novpep_annovar.variant_function') into annovar_out
 
   """
-  /annovar/annotate_variation.pl -out novpep_annovar -build hg19 $novelbed /annovar/humandb/
+  ./annotate_variation.pl -out novpep_annovar -build hg19 $novelbed humandb/
   """
 
 }
