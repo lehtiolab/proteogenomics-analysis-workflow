@@ -8,6 +8,6 @@ RUN conda env create -f /environment.yml && conda clean -a
 RUN conda env create -f /envs/openms_blat.yml && conda clean -a
 
 RUN git clone https://github.com/yafeng/SpectrumAI /SpectrumAI
-RUN cd /SpectrumAI && git pull && git reset --hard d9fc290cd76a5ec09aa17c03a380ad09cbce2387
+RUN cd /SpectrumAI && git pull && git reset --hard b8e7001807d834db633c30d265ef6e8361cdcb3c
 
 ENV PATH /opt/conda/envs/ipaw-1.0/bin:$PATH
