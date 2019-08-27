@@ -1,3 +1,5 @@
+#!/usr/bin/env nextflow
+
 /*
 vim: syntax=groovy
 -*- mode: groovy;-*-
@@ -15,7 +17,7 @@ FIXME:
  - make sure docker files are ok and in right place etc. Try them!
 */
 
-nf_required_version = '0.26.0'
+nf_required_version = '19.04.1'
 if( ! nextflow.version.matches(">= ${nf_required_version}") ){
   println("Nextflow version too old, ${nf_required_version} required")
   exit(1)
@@ -708,7 +710,7 @@ process ValidateSingleMismatchNovpeps {
 
   output:
   set val(setname), file("${setname}_novel_saav_specai.txt") into singlemis_specai
-  file 'precursorError.histogram.plot.pdf' into novel_specai_plot
+  file 'precursorError.histogram.plot.pdf' optional true into novel_specai_plot
 
   """
   mkdir mzmls
