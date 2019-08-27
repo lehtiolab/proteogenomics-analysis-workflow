@@ -484,27 +484,29 @@ process svmToTSV {
   """
 #!/usr/bin/env python
 from glob import glob
+from lxml import etree
 mzidtsvfns = sorted(glob('mzidtsv*'))
 mzidfns = sorted(glob('mzident*'))
 from app.readers import pycolator, xml, tsv, mzidplus
 import os
-ns = xml.get_namespace_from_top('$perco', None) 
-psms = {p.attrib['{%s}psm_id' % ns['xmlns']]: p for p in pycolator.generate_psms('$perco', ns)}
+ns = xml.get_namespace_from_top('$perco', None)
+psms = {}
+psms = {p.attrib['{%s}psm_id' % ns['xmlns']]: (float(p.find('{%s}svm_score' % ns['xmlns']).text),
+            p.attrib['{%s}decoy' % ns['xmlns']] == 'true') for p in pycolator.generate_psms('$perco', ns)}
 decoys = {True: 0, False: 0}
-for psm in sorted([(pid, float(p.find('{%s}svm_score' % ns['xmlns']).text), p) for pid, p in psms.items()], reverse=True, key=lambda x:x[1]):
-    pdecoy = psm[2].attrib['{%s}decoy' % ns['xmlns']] == 'true'
-    decoys[pdecoy] += 1
+for psm in sorted([(pid, score, decoy) for pid, (score, decoy) in psms.items()], reverse=True, key=lambda x:x[1]):
+    decoys[psm[2]] += 1
     try:
-        psms[psm[0]] = {'decoy': pdecoy, 'svm': psm[1], 'qval': decoys[True]/decoys[False]}  # T-TDC
+        psms[psm[0]] = {'decoy': psm[2], 'svm': psm[1], 'qval': decoys[True]/decoys[False]}  # T-TDC
     except ZeroDivisionError:
-        psms[psm[0]] = {'decoy': pdecoy, 'svm': psm[1], 'qval': 1.0}  # T-TDC
+        psms[psm[0]] = {'decoy': psm[2], 'svm': psm[1], 'qval': 1.0}  # T-TDC
 decoys = {'true': 0, 'false': 0}
-for svm, pep in sorted([(float(x.find('{%s}svm_score' % ns['xmlns']).text), x) for x in pycolator.generate_peptides('$perco', ns)], reverse=True, key=lambda x:x[0]):
-    decoys[pep.attrib['{%s}decoy' % ns['xmlns']]] += 1
+for svm, decoy, psm_ids in sorted([(float(x.find('{%s}svm_score' % ns['xmlns']).text), x.attrib['{%s}decoy' % ns['xmlns']], x.find('{%s}psm_ids' % ns['xmlns'])) for x in pycolator.generate_peptides('$perco', ns)], reverse=True, key=lambda x:x[0]):
+    decoys[decoy] += 1
     try:
-        [psms[pid.text].update({'pepqval': decoys['true']/decoys['false']}) for pid in pep.find('{%s}psm_ids' % ns['xmlns'])]
+        [psms[pid.text].update({'pepqval': decoys['true']/decoys['false']}) for pid in psm_ids]
     except ZeroDivisionError:
-        [psms[pid.text].update({'pepqval': 1.0}) for pid in pep.find('{%s}psm_ids' % ns['xmlns'])]
+        [psms[pid.text].update({'pepqval': 1.0}) for pid in psm_ids]
 oldheader = tsv.get_tsv_header(mzidtsvfns[0])
 header = oldheader + ['percolator svm-score', 'PSM q-value', 'peptide q-value']
 with open('mzidperco', 'w') as fp:
@@ -514,8 +516,6 @@ with open('mzidperco', 'w') as fp:
         siis = (sii for sir in mzidplus.mzid_spec_result_generator(mzidfn, mzns) for sii in sir.findall('{%s}SpectrumIdentificationItem' % mzns['xmlns']))
         for specidi, psm in zip(siis, tsv.generate_tsv_psms(mzidtsvfns[fnix], oldheader)):
             # percolator psm ID is: samplename_SII_scannr_rank_scannr_charge_rank
-            print(specidi)
-            print(psm)
             scan, rank = specidi.attrib['id'].replace('SII_', '').split('_')
             outpsm = {k: v for k,v in psm.items()}
             spfile = os.path.splitext(psm['#SpecFile'])[0]
