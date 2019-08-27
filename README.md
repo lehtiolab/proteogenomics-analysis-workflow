@@ -3,13 +3,13 @@ Integrated proteogenomics analysis workflow
 
 This is a workflow to identify, curate, and validate variant and novel peptides from MS proteomics spectra data, using the VarDB database. VarDB combines entries from COSMIC, PGOHUM, CanProVar and lncipedia. The pipeline takes mzML spectra files as input. The workflow is powered by [Nextflow](https://nextflow.io) and runs in [Docker](https://docker.com) containers.
 
-Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on 12 threads (adjust as you see fit) on a concatenated target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation.
+Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on a concatenated target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation.
 
-Please cite this paper when you have used the workflow for publications.
+Please cite the following paper when you have used the workflow for publications :)
 
 Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbridge A, Branca RMM, Lehtio J: Discovery of coding regions in the human genome by integrated proteogenomics analysis workflow. Nat Commun 2018, 9(1):903.  [PMID: 29500430](https://www.ncbi.nlm.nih.gov/pubmed/29500430)
 
-![workflow image](https://github.com/lehtiolab/proteogenomics-analysis-workflow/blob/master/images/workflow.png)
+![workflow image](https://github.com/lehtiolab/proteogenomics-analysis-workflow/blob/master/assets/workflow.png)
 
 ### Requirements
 
@@ -32,7 +32,7 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     
     + Fragment method
     
-    `--activation hcd  # default else use cid, etd`
+    `--activation hcd  # default, else use cid, etd`
     
     + Specify search DB
     
@@ -100,18 +100,21 @@ git clone https://github.com/lehtiolab/proteogenomics-analysis-workflow
 cd proteogenomics-analysis-workflow
 
 # Get Annovar
-cd dockerfiles
+cd /path/to/your/annovar
 wget __link_you_get_from_annovar__
 tar xvfz annovar.latest.tar.gz
+# This creates a folder with annotate_variation.pl and more files, to be passed to the pipeline with --annovar_dir
 
-# Download bigwigs
-docker build -f pgpython_bigwigs -t pgpython_bigwigs .  # downloads bigwig files, takes a long time
 
-# Create pipeline containers
-docker build -f spectrumAI -t spectrumai .
-docker build -f annovar_Dockerfile -t annovar .
-docker build -f pgpython -t pgpython . 
-cd ..
+# Download bigwigs, this can take some time
+cd /path/to/your/bigwigs  # this dir will be passed to the pipeline with --bigwigs
+wget http://hgdownload.cse.ucsc.edu/goldenPath/hg19/phastCons100way/hg19.100way.phastCons.bw 
+wget https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF+0.bw
+wget https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF+1.bw
+wget https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF+2.bw
+wget https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-0.bw
+wget https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-1.bw
+wget https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-2.bw
 
 # In the meantime, download and extract varDB data (Fasta, GTF, BlastP, SNP Fasta) to a good spot
 wget -O varDB_data.tar.gz https://ndownloader.figshare.com/files/13358006 
@@ -152,9 +155,9 @@ nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \
   --snpfa /path/to/MSCanProVar_ensemblV79.filtered.fasta \
   --genome /path/to/hg19.chr1-22.X.Y.M.fa \
   --dbsnp /path/to/snp142CodingDbSnp.txt \
+  --annovar_dir /path/to/your/annovar \
+  --bigwigs /path/to/your/bigwigs \
   --bamfiles /path/to/\*.bam --isobaric tmt10plex \
   --outdir /path/to/results
   -profile testing
 ```
-
-
