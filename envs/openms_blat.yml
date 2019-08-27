@@ -1,4 +1,4 @@
-name: openms-blat-2.4.0
+name: openms-blat-0.1
 channels:
   - bioconda
   - conda-forge

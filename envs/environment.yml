@@ -1,4 +1,4 @@
-name: ipaw-1.0
+name: ipaw-0.1
 channels:
   - bioconda
   - conda-forge
