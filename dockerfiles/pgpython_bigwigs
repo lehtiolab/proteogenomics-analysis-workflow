@@ -1,9 +1,0 @@
-FROM biopython/biopython
-
-ADD http://hgdownload.cse.ucsc.edu/goldenPath/hg19/phastCons100way/hg19.100way.phastCons.bw /bigwigs/
-ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF+0.bw /bigwigs/
-ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF+1.bw /bigwigs/
-ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF+2.bw /bigwigs/
-ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-0.bw /bigwigs/
-ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-1.bw /bigwigs/
-ADD https://data.broadinstitute.org/compbio1/PhyloCSFtracks/hg19/latest/PhyloCSF-2.bw /bigwigs/
