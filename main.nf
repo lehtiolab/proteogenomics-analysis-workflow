@@ -303,7 +303,7 @@ process IsobaricQuant {
   set val(sample), file("${infile}.consensusXML") into isobaricxml
 
   """
-  source activate openms-blat-2.4.0
+  source activate openms-blat-0.1
   IsobaricAnalyzer  -type $params.isobaric -in $infile -out "${infile}.consensusXML" -extraction:select_activation "$activationtype" -extraction:reporter_mass_shift $massshift -extraction:min_precursor_intensity 1.0 -extraction:keep_unannotated_precursor true -quantification:isotope_correction true 
   """
 }
@@ -752,7 +752,7 @@ process BLATNovel {
   set val(setname), file('blat_out.pslx') into novelblat
 
   """
-  source activate openms-blat-2.4.0
+  source activate openms-blat-0.1
   blat $genomefa $novelfasta -t=dnax -q=prot -tileSize=5 -minIdentity=99 -out=pslx blat_out.pslx 
   """
 }
