@@ -28,7 +28,6 @@ if( ! nextflow.version.matches(">= ${nf_required_version}") ){
 params.isobaric = false
 params.activation = 'hcd'
 params.bamfiles = false
-params.outdir = 'result'
 params.mods = 'Mods.txt'
 params.novheaders = '^PGOHUM;^lnc;^decoy_PGOHUM;^decoy_lnc' 
 params.varheaders = '^COSMIC;^CanProVar;^decoy_COSMIC;^decoy_CanProVar'
