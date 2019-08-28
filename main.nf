@@ -42,6 +42,7 @@ params.normalpsms = false
 params.annovar_dir = false
 params.bigwigs = false
 params.splitchar = false
+params.quantlookup = false
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
@@ -294,7 +295,7 @@ process makeTrypSeq {
 
 process IsobaricQuant {
 
-  when: params.isobaric
+  when: !params.quantlookup && params.isobaric
 
   input:
   set val(setname), val(sample), file(infile), val(strip), val(fraction) from mzml_isobaric
@@ -329,12 +330,16 @@ mzmlfiles
 
 process createSpectraLookup {
 
+  publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: {it == 'mslookup_db.sqlite' ? 'quant_lookup.sql' : null }
+
+  when: !params.quantlookup
+
   input:
   file(isobxmls) from sorted_isoxml 
   set val(setnames), file(mzmlfiles) from mzmlfiles_all
   
   output:
-  file('mslookup_db.sqlite') into spec_lookup
+  file('mslookup_db.sqlite') into newspeclookup
 
   script:
   if(params.isobaric)
@@ -347,6 +352,16 @@ process createSpectraLookup {
   msslookup spectra -i ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
   """
 }
+
+
+if (!params.quantlookup) {
+  newspeclookup
+    .set { spec_lookup }
+} else {
+  Channel
+    .fromPath(params.quantlookup)
+    .set { spec_lookup }
+} 
 
 
 process msgfPlus {
