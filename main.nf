@@ -62,10 +62,6 @@ plextype = params.isobaric ? params.isobaric.replaceFirst(/[0-9]+plex/, "") : fa
 massshift = massshifts[plextype]
 msgfprotocol = params.isobaric ? [tmt:4, itraq:2][plextype] : 0
 
-///////////////////
-// FOR 6FT SPLIT DATABASES
-pipeptides = params.pisepdb ? file(params.pisepdb) : false
-//////////////////
 
 /* PIPELINE START */
 
@@ -174,6 +170,10 @@ process normalSearchPsmsToPeptides {
   """
 }
 
+pipep = params.pisepdb ? Channel.fromPath(params.pisepdb) : Channel.empty()
+setplatepeptides
+  .combine(pipep)
+  .set { sixftcreation_in }
 
 process create6FTDB {
   // create 6FT DB per peptable-plate, collect fr 
@@ -181,8 +181,7 @@ process create6FTDB {
   when: params.pisepdb
 
   input:
-  set val(setname), val(stripname), file(peptides) from setplatepeptides
-  file pipeptides
+  set val(setname), val(stripname), file(peptides), file(pipeptides) from sixftcreation_in
 
   output:
   set val(setname), val(stripname), file('target_fr*.fasta') into t_splitdb
