@@ -62,13 +62,6 @@ plextype = params.isobaric ? params.isobaric.replaceFirst(/[0-9]+plex/, "") : fa
 massshift = massshifts[plextype]
 msgfprotocol = params.isobaric ? [tmt:4, itraq:2][plextype] : 0
 
-//////////////////
-// FOR NON-VARDB DATABASES
-// E.g. 6FT, 3FT or WXS
-novheaders = params.novheaders == true ? false : params.novheaders
-varheaders = params.varheaders == true ? false : params.varheaders
-///////////////////
-
 ///////////////////
 // FOR 6FT SPLIT DATABASES
 pipeptides = params.pisepdb ? file(params.pisepdb) : false
@@ -419,7 +412,7 @@ percolated
 
 process getVariantPercolator {
 
-  when: varheaders
+  when: params.varheaders
 
   input:
   set val(setname), file(x) from var_percolated
@@ -427,14 +420,14 @@ process getVariantPercolator {
   output:
   set val(setname), val('variant'), file("${x}_h0.xml") into var_perco
   """
-  msspercolator splitprotein -i $x --protheaders \'$varheaders\'
+  msspercolator splitprotein -i $x --protheaders \'${params.varheaders}\'
   """
 }
 
 
 process getNovelPercolator {
 
-  when: novheaders
+  when: params.novheaders
 
   input:
   set val(setname), file(x) from nov_percolated
@@ -442,7 +435,7 @@ process getNovelPercolator {
   output:
   set val(setname), val('novel'), file("${x}_h0.xml") into nov_perco
   """
-  msspercolator splitprotein -i $x --protheaders \'$novheaders\'
+  msspercolator splitprotein -i $x --protheaders \'${params.novheaders}\'
   """
 }
 
