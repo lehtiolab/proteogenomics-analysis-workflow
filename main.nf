@@ -17,7 +17,7 @@ FIXME:
  - make sure docker files are ok and in right place etc. Try them!
 */
 
-nf_required_version = '19.04.1'
+nf_required_version = '19.04.0'
 if( ! nextflow.version.matches(">= ${nf_required_version}") ){
   println("Nextflow version too old, ${nf_required_version} required")
   exit(1)
