@@ -617,8 +617,8 @@ process prePeptideTable {
   """
   msspsmtable merge -o psms.txt -i psms* 
   msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 ${params.isobaric ? '--isobquantcolpattern plex' : ''}
-  awk -F '\\t' 'BEGIN {OFS = FS} {print \$12,\$13,\$3,\$7,\$8,\$9,\$11,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22}' preisoquant > preordered
-  ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${set_denoms.value[setname].join(' ')} --protcol 11" : 'mv preordered peptidetable.txt'}
+  awk -F '\\t' 'BEGIN {OFS = FS} {print \$13,\$14,\$3,\$8,\$9,\$10,\$12,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22,\$23}' preisoquant > preordered
+  ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${set_denoms.value[setname].join(' ')} --protcol 12" : 'mv preordered peptidetable.txt'}
   """
 }
 
