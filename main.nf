@@ -80,7 +80,7 @@ Channel
 
 mzml_in
   .tap { sets }
-  .map { it -> [file(it[0]), it[1], it[2] ? it[2] : 'NA', it[3] ? it[3] : 'NA' ]} // create file, set plate and fraction to NA if there is none
+  .map { it -> [file(it[0]), it[1], it[2] ? it[2] : 'NA', it[3] ? it[3].toInteger() : 'NA' ]} // create file, set plate and fraction to NA if there is none
   .tap { strips }
   .map { it -> [it[1], it[0].baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it[0], it[2], it[3]] }
   .tap{ mzmlfiles; mzml_isobaric; mzml_premsgf }
