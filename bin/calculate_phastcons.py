@@ -25,7 +25,7 @@ outfile = sys.argv[3]
 bw = pw.open(bw_file)
 oF = open(outfile, "w")
 
-header = ["Peptide","phastcon_max_score","phastcon_mean_score"]
+header = ["Bare peptide","phastcon_max_score","phastcon_mean_score"]
 oF.write("\t".join(header)+"\n")
 
 pep_dic = {}

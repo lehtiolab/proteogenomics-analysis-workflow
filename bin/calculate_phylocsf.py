@@ -78,7 +78,7 @@ for rf in ["+0","+1","+2","+3","-0","-1","-2","-3"]:
 
 
 output = open(outfile,"w")
-output.write("\t".join(["Peptide","PhyloCSF+0.score","PhyloCSF+1.score","PhyloCSF+2.score","PhyloCSF-0.score","PhyloCSF-1.score","PhyloCSF-2.score","PhyloCSF_prediction"])+"\n")
+output.write("\t".join(["Bare peptide","PhyloCSF+0.score","PhyloCSF+1.score","PhyloCSF+2.score","PhyloCSF-0.score","PhyloCSF-1.score","PhyloCSF-2.score","PhyloCSF_prediction"])+"\n")
 
 pep_scores={}
 

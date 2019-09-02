@@ -162,7 +162,7 @@ header=input.readline().split("\t")
 pep_col = header.index("Peptide")
 pro_col = header.index("Protein")
 
-newheader=["Peptide","Mod.peptide","Protein","chr","start","end","strand"]
+newheader=["Bare peptide","Peptide","Protein","chr","start","end","strand"]
 tab_output.write("\t".join(newheader) + '\n')
 
 non_mapped_pep=0

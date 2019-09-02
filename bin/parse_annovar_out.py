@@ -38,7 +38,7 @@ while True:
 print("%d peptides returned with anovar annotation" % len(category))
 
 input2.readline()
-header=["Peptide","anovar_category","associated_gene"]
+header=["Bare peptide","anovar_category","associated_gene"]
 output.write("\t".join(header)+"\n")
 for line in input2:
     row=line.strip().split("\t")

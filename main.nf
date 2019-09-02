@@ -931,8 +931,8 @@ process combineResults{
   join joined3 $e -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined4
   join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
   join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
-  grep '^Peptide' joined6 > ${setname}_novel_peptides.txt
-  grep -v '^Peptide' joined6 >> ${setname}_novel_peptides.txt
+  grep '^Bare peptide' joined6 > ${setname}_novel_peptides.txt
+  grep -v '^Bare peptide' joined6 >> ${setname}_novel_peptides.txt
   """
 
   else
@@ -945,8 +945,8 @@ process combineResults{
   join joined4 $f -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined5
   join joined5 $g -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined6
   join joined6 $h -a1 -a2 -o auto -e 'NA' -t \$'\\t' > joined7
-  grep '^Peptide' joined7 > ${setname}_novel_peptides.txt
-  grep -v '^Peptide' joined7 >> ${setname}_novel_peptides.txt
+  grep '^Bare peptide' joined7 > ${setname}_novel_peptides.txt
+  grep -v '^Bare peptide' joined7 >> ${setname}_novel_peptides.txt
   """
 }
 
@@ -1028,8 +1028,8 @@ novpeps_finished
   .set { setmerge_peps }
 
 
-accession_keymap = ['var': 'Peptide sequence', 'nov': 'Mod.peptide']
-acc_removemap = ['nov': 'Peptide', 'var': 'Mod.peptide']
+accession_keymap = ['var': 'Peptide sequence', 'nov': 'Peptide']
+acc_removemap = ['nov': 'Bare peptide', 'var': 'Mod.peptide']
 
 
 process mergeSetPeptidetable {

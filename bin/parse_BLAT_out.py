@@ -48,7 +48,7 @@ print("blat multi map peptides",len(pep_multi_loci))
 print("blat unique map peptides",len(pep_unique_loci))
 
 input2.readline()
-header = ["Peptide","blat_category","blat_match"]
+header = ["Bare peptide","blat_category","blat_match"]
 output.write("\t".join(header)+"\n")
 
 for line in input2:

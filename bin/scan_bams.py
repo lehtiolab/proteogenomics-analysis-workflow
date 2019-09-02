@@ -176,7 +176,7 @@ input2.close()
 bam_files = sorted(list(aln_table.keys()))
 
 # Write output file header.
-output.write('Peptide\t')
+output.write('Bare peptide\t')
 for i in range(0,len(bam_files)):
     output.write(bam_files[i].split('.')[0].split('/')[-1])
     if (i < (len(bam_files)-1)): output.write('\t')
