@@ -655,8 +655,9 @@ process createFastaBedGFF {
   sort -k 2b,2 <(tail -n+2 novel_peptides.tab.txt) > novpep_sorted
   paste <(cut -f 2 novpep_sorted) <(cut -f1,3-500 novpep_sorted) > novpep_pepcols
   join novpep_pepcols peptable_sorted -j 1 -a1 -o auto -e 'NA' -t \$'\\t' > novpep_pqjoin
-  paste <(cut -f 2 novpep_pqjoin) <(cut -f1,3-500 novpep_pqjoin) > novpep_joined_pepcols
-  paste <(head -n1 novel_peptides.tab.txt)  <(cut -f 14-500 $peptides |head -n1) > header
+  # Cut only bare peptide col and q-values/isoquant
+  paste <(cut -f 2 novpep_pqjoin) <(cut -f8-500 novpep_pqjoin) > novpep_joined_pepcols
+  paste <(head -n1 novel_peptides.tab.txt | cut -f1)  <(cut -f 14-500 $peptides |head -n1) > header
   cat header novpep_joined_pepcols > novpep_perco_quant.txt
   """
 }
