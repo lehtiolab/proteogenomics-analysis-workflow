@@ -18,10 +18,10 @@ import pyBigWig as pw
 import numpy as np
 
 def predict_coding(vec):
-    coding = "no"
+    coding = "OTHER"
     for v in vec:
         if not v: continue
-        if v > 0: coding = "yes"
+        if v > 0: coding = "CODING"
     return(coding)
 
 if len(sys.argv)<4:

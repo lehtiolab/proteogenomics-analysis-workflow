@@ -54,7 +54,7 @@ for line in input2: # peptide sequence is in first column
     pep=re.sub("[\W\d]","",row[0].strip())
     n1+=1
     if pep in specAI_result:
-        row.append(specAI_result[pep])
+        row.append({'YES': 'PASS', 'NO': 'FAIL'}[specAI_result[pep]])
         if specAI_result[pep]=="YES":
             n2+=1
     else:
