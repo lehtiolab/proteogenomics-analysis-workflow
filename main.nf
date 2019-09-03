@@ -196,67 +196,49 @@ process create6FTDB {
 // channel match plate/fr/mzML
 if (params.pisepdb) {
   t_splitdb
-    //.concat(d_splitdb)
     .transpose()
     .map { it -> ["${it[0]}_${it[1]}_${it[2].baseName.replaceFirst(/.*_fr[0]*/, "")}", it[2]]}
     .set { db_w_id }
+  mzml_premsgf
+    .map { it -> ["${it[0]}_${it[3]}_${it[4]}", it[0], it[1], it[2]] }  // add set_strip_fr identifier
+    .into { mzml_dbid; mzml_dbfilter }
 } else {
   Channel.from([['NA', tdb]]).set { db_w_id }
+  mzml_premsgf
+    .map { it -> ["NA", it[0], it[1], it[2]] }
+    .into { mzml_dbid; mzml_dbfilter }
 }
 
+// Join DB with mzmls, use join filters out DBs without a match (in case of missing mzML fractions) 
+// or duplicates (when having reruns, or when not running pI separared DBs in which case you only need 
+// this process once). So we dont generate more decoys than necessary
+db_w_id
+  .join(mzml_dbfilter)
+  .map { it -> [it[0], it[1]] }
+  .set { db_filtered }
 
 process concatFasta {
  
   input:
-  set val(dbid), file(db) from db_w_id 
+  set val(dbid), file(db) from db_filtered
   file knownproteins
 
   output:
-  set val(dbid), file('db.fa') into targetdb
+  set val(dbid), file('td_concat.fa') into db_concatdecoy
 
   script:
   """
-  cat $db $knownproteins > db.fa
+  cat $db $knownproteins > dbplusknown.fa
+  reverse_decoy.py dbplusknown.fa
   """
 }
 
-
-process makeDecoyReverseDB {
-
-  input:
-  set val(dbid), file(db) from targetdb
-
-  output:
-  set val(dbid), file('concatdb.fasta') into concatdb
-
-  """
-  #!/usr/bin/env python3
-  from Bio import SeqIO
-  with open('$db') as fp, open('concatdb.fasta', 'w') as wfp:
-    for target in SeqIO.parse(fp, 'fasta'):
-      SeqIO.write(target, wfp, 'fasta')
-      decoy = target[::-1] 
-      decoy.description = decoy.description.replace('ENS', 'decoy_ENS')
-      decoy.id = 'decoy_{}'.format(decoy.id)
-      SeqIO.write(decoy, wfp, 'fasta')
-  """
-}
-
-
-if (params.pisepdb) {
-  mzml_premsgf
-    .map { it -> ["${it[0]}_${it[3]}_${it[4]}", it[0], it[1], it[2]] }  // add set_strip_fr identifier
-    .set { mzml_dbid }
-} else {
-  mzml_premsgf
-    .map { it -> ["NA", it[0], it[1], it[2]] }
-    .set { mzml_dbid }
-}
-concatdb
-  .cross(mzml_dbid) 
+// Now re-match the DB (now with decoy) with mzML, this is needed to fan out if more mzMLs than
+// DBs have been used so we use the cross operator
+db_concatdecoy
+  .cross(mzml_dbid) // gives two Arrays so unfold them in next map step
   .map { it -> [it[0][0], it[0][1], it[1][1], it[1][2], it[1][3]] } // dbid, db, set, sample, file
   .set { mzml_msgf }
-
 
 process makeProtSeq {
 
