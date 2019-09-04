@@ -228,8 +228,10 @@ process concatFasta {
 
   script:
   """
-  cat $db $knownproteins > dbplusknown.fa
-  reverse_decoy.py dbplusknown.fa
+  cat $db $knownproteins > td_concat.fa
+  reverse_decoy.py td_concat.fa
+  cat decoy_td_concat.fa >> td_concat.fa
+  rm decoy_td_concat.fa
   """
 }
 
