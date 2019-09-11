@@ -285,11 +285,9 @@ process IsobaricQuant {
   """
 }
 
-isobaricamount = params.isobaric ? amount_mzml.value : 1
-
 isobaricxml
   .ifEmpty(['NA', 'NA'])
-  .buffer(size: isobaricamount)
+  .toList()
   .flatMap { it.sort({a, b -> a[0] <=> b[0]}) }
   .map { it -> it[1] }
   .collect()
@@ -298,7 +296,7 @@ isobaricxml
 
 mzmlfiles
   .tap { groupset_mzmls }
-  .buffer(size: amount_mzml.value)
+  .toList()
   .map { it.sort( {a, b -> a[1] <=> b[1]}) }
   .map { it -> [it.collect() { it[0] }, it.collect() { it[2] }] }
   .set{ mzmlfiles_all }
