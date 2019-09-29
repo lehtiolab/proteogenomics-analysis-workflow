@@ -498,10 +498,14 @@ for psm in sorted([(pid, score, decoy) for pid, (score, decoy) in psms.items()],
 decoys = {'true': 0, 'false': 0}
 for svm, decoy, psm_ids in sorted([(float(x.find('{%s}svm_score' % ns['xmlns']).text), x.attrib['{%s}decoy' % ns['xmlns']], x.find('{%s}psm_ids' % ns['xmlns'])) for x in pycolator.generate_peptides('$perco', ns)], reverse=True, key=lambda x:x[0]):
     decoys[decoy] += 1
-    try:
-        [psms[pid.text].update({'pepqval': decoys['true']/decoys['false']}) for pid in psm_ids]
-    except ZeroDivisionError:
-        [psms[pid.text].update({'pepqval': 1.0}) for pid in psm_ids]
+    for pid in psm_ids:
+        try:
+            psms[pid.text].update({'pepqval': decoys['true']/decoys['false']})
+        except ZeroDivisionError:
+            psms[pid.text].update({'pepqval': 1.0})
+  #      except KeyError:
+  #          pass # This happens when MSGF incorrectly matches to no-ENSPs https://github.com/MSGFPlus/msgfplus/issues/78
+        
 oldheader = tsv.get_tsv_header(mzidtsvfns[0])
 header = oldheader + ['percolator svm-score', 'PSM q-value', 'peptide q-value']
 with open('mzidperco', 'w') as fp:
