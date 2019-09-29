@@ -340,8 +340,6 @@ if (!params.quantlookup) {
 
 process msgfPlus {
 
-  cpus = config.poolSize < 4 ? config.poolSize : 4
-
   // Some versions have problems when converting to TSV, possible too long identifiers 
   // If problems arise, try to use an older version: msgf_plus:2016.10.26--py27_1
 
@@ -354,12 +352,11 @@ process msgfPlus {
   set val(setname), file("${sample}.mzid"), file('out.mzid.tsv') into mzidtsvs
   
   script:
-  multiplier = params.pisepdb ? 2 : 1
+  mem = db.size() * 16 // Xmx in Bytes needed for java
   """
-  mem=\$(( \$(du -Lk $db|cut -f1) * 8 / 1024 * $multiplier ))
-  msgf_plus -Xmx\$(( mem < 4096 ? 4096 : \$mem))M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * 3} -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
+  msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i "${sample}.mzid" -o out.mzid.tsv
-  rm ${db.baseName.replaceFirst(/\.fasta/, "")}.c*
+  rm td_concat.c*
   """
 }
 
