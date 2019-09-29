@@ -79,13 +79,18 @@ Channel
 }
 
 mzml_in
-  .tap { sets }
+  .tap { sets; mzmlcounter }
   .map { it -> [file(it[0]), it[1], it[2] ? it[2] : 'NA', it[3] ? it[3].toInteger() : 'NA' ]} // create file, set plate and fraction to NA if there is none
   .tap { strips }
   .map { it -> [it[1], it[0].baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it[0], it[2], it[3]] }
   .tap{ mzmlfiles; mzml_isobaric; mzml_premsgf }
   .count()
   .set{ amount_mzml }
+
+mzmlcounter
+  .count()
+  .subscribe { println "$it mzML files in analysis" }
+  .set { mzmlcount_psm }
 
 sets
   .map{ it -> it[1] }
@@ -529,6 +534,7 @@ process createPSMTables {
 
   input:
   set val(setname), val(peptype), file('psms'), file('lookup') from prepsm
+  val(mzmlcount) from mzmlcount_psm
 
   output:
   set val(setname), val(peptype), file("${setname}_${peptype}_psmtable.txt") into psmtable
