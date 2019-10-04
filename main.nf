@@ -12,9 +12,6 @@ Jorrit Boekel @glormph
 Yafeng Zhu @yafeng
 
 https://github.com/lehtiolab/proteogenomics-analysis-workflow
-
-FIXME:
- - make sure docker files are ok and in right place etc. Try them!
 */
 
 nf_required_version = '19.04.0'
@@ -83,9 +80,7 @@ mzml_in
   .map { it -> [file(it[0]), it[1], it[2] ? it[2] : 'NA', it[3] ? it[3].toInteger() : 'NA' ]} // create file, set plate and fraction to NA if there is none
   .tap { strips }
   .map { it -> [it[1], it[0].baseName.replaceFirst(/.*\/(\S+)\.mzML/, "\$1"), it[0], it[2], it[3]] }
-  .tap{ mzmlfiles; mzml_isobaric; mzml_premsgf }
-  .count()
-  .set{ amount_mzml }
+  .into { mzmlfiles; groupset_mzmls; mzml_isobaric; mzml_premsgf }
 
 mzmlcounter
   .count()
@@ -99,7 +94,6 @@ sets
   .collect()
   .subscribe { println "Detected setnames: ${it.join(', ')}" }
 
-// FIXME can we get rid of amount_mzml should be per set I guess and probably deleted!
 
 strips
   .map { it -> [it[1], it[2]] }
@@ -300,7 +294,6 @@ isobaricxml
 
 
 mzmlfiles
-  .tap { groupset_mzmls }
   .toList()
   .map { it.sort( {a, b -> a[1] <=> b[1]}) }
   .map { it -> [it.collect() { it[0] }, it.collect() { it[2] }] }
@@ -597,14 +590,13 @@ process mergeSetPSMtable {
 process prePeptideTable {
 
   input:
-  set val(setname), val(peptype), file('psms?') from peppsms 
+  set val(setname), val(peptype), file('psms.txt') from peppsms 
 
   output:
   set val(setname), val(peptype), file('peptidetable.txt') into peptable
 
   script:
   """
-  msspsmtable merge -o psms.txt -i psms* 
   msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 ${params.isobaric ? '--isobquantcolpattern plex' : ''}
   awk -F '\\t' 'BEGIN {OFS = FS} {print \$13,\$14,\$3,\$8,\$9,\$10,\$12,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22,\$23}' preisoquant > preordered
   ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${set_denoms.value[setname].join(' ')} --protcol 12" : 'mv preordered peptidetable.txt'}
@@ -819,15 +811,7 @@ process phyloCSF {
 }
 
 
-if (params.bamfiles) {
-  bamFiles = Channel
-    .fromPath(params.bamfiles)
-    .map { fn -> [ fn, fn + '.bai' ] }
-    .collect()
-} else {
-  bamFiles = Channel.empty()
-}
-
+bamFiles = params.bamfiles ? Channel.fromPath(params.bamfiles).map { fn -> [ fn, fn + '.bai' ] } : Channel.empty()
 
 process scanBams {
 
@@ -835,7 +819,7 @@ process scanBams {
 
   input:
   set val(setname), file(gff) from novelGFF3_bams
-  file bams from bamFiles
+  file bams from bamFiles.collect()
   
   output:
   set val(setname), file('scannedbams.txt') into scannedbams
@@ -885,15 +869,6 @@ process parseAnnovarOut {
   """
 }
 
-if (params.bamfiles){
-  scannedbams
-    .set { bamsOrEmpty }
-}
-else {
-  sets_for_emtpybam
-    .map { it -> [it, 'No bams'] }
-    .set { bamsOrEmpty }
-}
 
 ns_snp_out
   .join(novpep_singlemisspecai)
@@ -902,8 +877,9 @@ ns_snp_out
   .join(phastcons_out)
   .join(phylocsf_out)
   .join(novelpep_percoquant)
-  .join(bamsOrEmpty)
-  .set { combined_novel }
+  .set { combined_novelprebam }
+
+combined_novel = (params.bamfiles ? combined_novelprebam.join(scannedbams) : combined_novelprebam)
 
 
 process combineResults{
