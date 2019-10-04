@@ -786,14 +786,15 @@ process labelnsSNP {
   """
 }
 
+bwfile = Channel.fromPath(params.bigwigs)
 novelGFF3
+  .combine(bwfile)
   .into { novelGFF3_phast; novelGFF3_phylo; novelGFF3_bams }
 
 process phastcons {
   
   input:
-  set val(setname), file(novelgff) from novelGFF3_phast
-  file('bigwigs') from Channel.fromPath(params.bigwigs)
+  set val(setname), file(novelgff), file('bigwigs') from novelGFF3_phast
 
   output:
   set val(setname), file ('phastcons.txt') into phastcons_out
@@ -806,8 +807,7 @@ process phastcons {
 process phyloCSF {
   
   input:
-  set val(setname), file(novelgff) from novelGFF3_phylo
-  file('bigwigs') from Channel.fromPath(params.bigwigs)
+  set val(setname), file(novelgff), file('bigwigs') from novelGFF3_phylo
 
   output:
   set val(setname), file('phylocsf.txt') into phylocsf_out
@@ -846,13 +846,18 @@ process scanBams {
   """
 }
 
+annoperl = Channel.fromPath("$params.annovar_dir/annotate_variation.pl")
+annohumdb = Channel.fromPath("$params.annovar_dir/humandb/")
+
+novelbed
+  .combine(annoperl)
+  .combine(annohumdb)
+  .set { anno_in }
 
 process annovar {
   
   input:
-  set val(setname), file(novelbed) from novelbed
-  file annovar from Channel.fromPath("$params.annovar_dir/annotate_variation.pl")
-  file ("humandb") from Channel.fromPath("$params.annovar_dir/humandb/")
+  set val(setname), file(novelbed), file(perlscript), file(humdb) from anno_in
 
   output:
   set val(setname), file('novpep_annovar.variant_function') into annovar_out
