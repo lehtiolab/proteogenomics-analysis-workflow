@@ -495,8 +495,13 @@ for svm, decoy, psm_ids in sorted([(float(x.find('{%s}svm_score' % ns['xmlns']).
             psms[pid.text].update({'pepqval': decoys['true']/decoys['false']})
         except ZeroDivisionError:
             psms[pid.text].update({'pepqval': 1.0})
-  #      except KeyError:
-  #          pass # This happens when MSGF incorrectly matches to no-ENSPs https://github.com/MSGFPlus/msgfplus/issues/78
+        except KeyError:
+            # This happens when MSGF has multiple PSMs for a peptide, but for some reason the PSMs get different FA header matching.
+            # So, it (incorrectly?) matches to e.g. no-ENSPs https://github.com/MSGFPlus/msgfplus/issues/78
+            # And when the PSMs with ENSP are thrown out by filter, it then cant find them anymore when back tracking from the percolator peptide
+            # PSM ids, (peptide has no ENSP annotation and is thus kept).
+            # For now, throw out the PSM FIXME
+            [psms[x].update({'pepqval': 1}) for x in psm_ids if x in psms]
         
 oldheader = tsv.get_tsv_header(mzidtsvfns[0])
 header = oldheader + ['percolator svm-score', 'PSM q-value', 'peptide q-value']
