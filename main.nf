@@ -40,6 +40,8 @@ params.annovar_dir = false
 params.bigwigs = false
 params.splitchar = false
 params.quantlookup = false
+params.minlen = 8
+params.maxlen = 50
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
@@ -252,7 +254,7 @@ process makeProtSeq {
   file('mslookup_db.sqlite') into protseqdb
 
   """
-  msslookup protspace -i $knownproteins --minlen 8
+  msslookup protspace -i $knownproteins --minlen $params.minlen
   """
 }
 
@@ -265,7 +267,7 @@ process makeTrypSeq {
   file('mslookup_db.sqlite') into trypseqdb
 
   """
-  msslookup seqspace -i $knownproteins --insourcefrag
+  msslookup seqspace -i $knownproteins --insourcefrag --minlen $params.minlen
   """
 }
 
@@ -353,7 +355,7 @@ process msgfPlus {
   
   script:
   """
-  msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength 7 -maxLength 50 -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
+  msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength $params.minlen -maxLength $params.maxlen -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i "${sample}.mzid" -o out.mzid.tsv
   rm td_concat.c*
   """
@@ -441,7 +443,7 @@ process filterPercolator {
   else
   """
   msspercolator filterseq -i $perco -o filtseq --dbfile trypseqdb --insourcefrag 2 --deamidate 
-  msspercolator filterprot -i filtseq -o filtprot --fasta $knownproteins --dbfile protseqdb --minlen 8 --deamidate
+  msspercolator filterprot -i filtseq -o filtprot --fasta $knownproteins --dbfile protseqdb --minlen $params.minlen --deamidate
   """
 }
 
