@@ -1,11 +1,11 @@
-name: ipaw-0.1
+name: ipaw-0.3
 channels:
   - bioconda
   - conda-forge
   - defaults
 dependencies:
   - bioconda::msgf_plus=2019.07.03
-  - bioconda::msstitch=2.14
+  - bioconda::msstitch=2.16
   - conda-forge::biopython=1.72
   - bioconda::percolator=3.1
   - bioconda::blast=2.9.0

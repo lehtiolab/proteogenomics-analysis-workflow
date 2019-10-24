@@ -172,6 +172,7 @@ process normalSearchPsmsToPeptides {
 }
 
 pipep = params.pisepdb ? Channel.fromPath(params.pisepdb) : Channel.empty()
+varnov_peptides = params.pisepdb ? Channel.fromPath(params.pisepdb) : Channel.from(tdb)
 setplatepeptides
   .combine(pipep)
   .set { sixftcreation_in }
@@ -212,18 +213,41 @@ if (params.pisepdb) {
     .into { mzml_dbid; mzml_dbfilter }
 }
 
+process makeTargetSeqLookup {
+
+  input:
+  file(tdb) from varnov_peptides
+  file(knownproteins)
+
+  output:
+  file('mslookup_db.sqlite') into target_seq_lookup
+
+  script:
+  """
+  # create text file of pi sep (much faster to import to SQLite than fasta)
+  ${params.pisepdb ? "cut -f2 $tdb | sort -u > targetseq.txt" : "grep -v '^>' $tdb > targetseq.txt"}
+  # Add trypsinized known proteins to txt file
+  msslookup trypsinize -i $knownproteins -o knowntryp
+  grep -v '^>' knowntryp >> targetseq.txt
+
+  # TODO parametrize notrypsin?
+  msslookup seqspace -i targetseq.txt --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
+  """
+}
+
 // Join DB with mzmls, use join filters out DBs without a match (in case of missing mzML fractions) 
 // or duplicates (when having reruns, or when not running pI separared DBs in which case you only need 
 // this process once). So we dont generate more decoys than necessary
 db_w_id
   .join(mzml_dbfilter)
   .map { it -> [it[0], it[1]] }
+  .combine(target_seq_lookup)
   .set { db_filtered }
 
 process concatFasta {
  
   input:
-  set val(dbid), file(db) from db_filtered
+  set val(dbid), file(db), file(targetlookup) from db_filtered
   file knownproteins
 
   output:
@@ -232,9 +256,10 @@ process concatFasta {
   script:
   """
   cat $db $knownproteins > td_concat.fa
-  reverse_decoy.py td_concat.fa
-  cat decoy_td_concat.fa >> td_concat.fa
-  rm decoy_td_concat.fa
+  msslookup makedecoy -i $db --dbfile $targetlookup -o decoy_db.fa --scramble tryp_rev --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
+  msslookup makedecoy -i $knownproteins --dbfile $targetlookup -o decoy_known.fa --scramble tryp_rev --minlen $params.minlen
+  cat decoy_db.fa decoy_known.fa >> td_concat.fa
+  rm decoy_*.fa
   """
 }
 
