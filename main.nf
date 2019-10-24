@@ -188,9 +188,11 @@ process create6FTDB {
   script:
   strip = params.strips[stripname]
   """
-  pi_database_splitter.py -i $pipeptides -p $peptides --intercept $strip.intercept --width $strip.fr_width --tolerance $strip.tolerance --amount $strip.fr_amount  ${strip.reverse ? '--reverse' : ''} --deltacolpattern Delta --fdrcolpattern '^q-value' --picutoff 0.2 --fdrcutoff 0.0 --maxlen 50 --minlen 8
+  echo \'${groovy.json.JsonOutput.toJson(strip)}\' >> strip.json
+  pi_database_splitter.py -i $pipeptides -p $peptides --stripdef strip.json --deltacolpattern Delta --fraccolpattern Fraction --fdrcolpattern '^q-value' --picutoff 0.2 --fdrcutoff 0.0 --maxlen $params.maxlen --minlen $params.minlen
   """
 }
+
 
 // channel match plate/fr/mzML
 if (params.pisepdb) {
