@@ -14,8 +14,6 @@ def main():
     if sys.argv[1:] == []:
         sys.argv.append('-h')
     args = parse_commandline()
-    locfun = {False: locatefraction,
-              True: reverse_locatefraction}[args.reverse]
     with open(args.stripdef) as fp:
         strip = json.load(fp)
     if 'intercept' in strip:
@@ -48,6 +46,7 @@ def main():
         stripdata['fr_range'] =  (int(frrange[0]), int(frrange[1])) 
         stripdata['pishift'] = get_pishift(args.train_peptable, fdrcol, deltapicol, frac_col,
                 stripdata['fr_range'], args.fdrcutoff, args.picutoff)
+    locfun = locatefraction if not stripdata['reverse'] else reverse_locatefraction
     binarray = get_bin_array(strip)
     write_fractions(args.pipeps, strip, binarray, locfun, args.minlen,
                     args.maxlen)
