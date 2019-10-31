@@ -42,7 +42,10 @@ for line in input1:
     pep=re.sub("[\W\d]","",row[index1].strip())
     try:
         if row[index3]=="checked":
-            specAI_result[pep]=row[index2]
+            try:
+                specAI_result[pep].append(row[index2])
+            except KeyError:
+                specAI_result[pep] = [row[index2]]
     except IndexError:
         print(("the line doesn't have the right number of columns"), line)
 
@@ -53,12 +56,14 @@ for line in input2: # peptide sequence is in first column
     row=line.strip().split("\t")
     pep=re.sub("[\W\d]","",row[0].strip())
     n1+=1
-    if pep in specAI_result:
-        row.append({'YES': 'PASS', 'NO': 'FAIL'}[specAI_result[pep]])
-        if specAI_result[pep]=="YES":
+    try:
+        if 'YES' in specAI_result[pep]:
+            row.append('PASS')
             n2+=1
-    else:
-        row.append("NA")
+        else:
+            row.append('FAIL')
+    except KeyError:
+        row.append('NA')
 
     output.write("\t".join(row)+"\n")
 
