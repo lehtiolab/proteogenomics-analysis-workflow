@@ -220,7 +220,7 @@ process makeTargetSeqLookup {
   file(knownproteins)
 
   output:
-  file('mslookup_db.sqlite') into target_seq_lookup
+  set file('mslookup_db.sqlite'), file('decoy_known.fa') into target_seq_lookup
 
   script:
   """
@@ -232,6 +232,7 @@ process makeTargetSeqLookup {
 
   # TODO parametrize notrypsin?
   msslookup seqspace -i targetseq.txt --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
+  msslookup makedecoy -i $knownproteins --dbfile mslookup_db.sqlite -o decoy_known.fa --scramble tryp_rev --minlen $params.minlen
   """
 }
 
@@ -247,7 +248,7 @@ db_w_id
 process concatFasta {
  
   input:
-  set val(dbid), file(db), file(targetlookup) from db_filtered
+  set val(dbid), file(db), file(targetlookup), file('decoy_known.fa') from db_filtered
   file knownproteins
 
   output:
@@ -255,11 +256,12 @@ process concatFasta {
 
   script:
   """
+  # copy DB for faster access on network FS
+  cp ${targetlookup} localdb.sql
   cat $db $knownproteins > td_concat.fa
-  msslookup makedecoy -i $db --dbfile $targetlookup -o decoy_db.fa --scramble tryp_rev --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
-  msslookup makedecoy -i $knownproteins --dbfile $targetlookup -o decoy_known.fa --scramble tryp_rev --minlen $params.minlen
+  msslookup makedecoy -i $db --dbfile localdb.sql -o decoy_db.fa --scramble tryp_rev --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
   cat decoy_db.fa decoy_known.fa >> td_concat.fa
-  rm decoy_*.fa
+  rm decoy_db.fa localdb.sql
   """
 }
 
