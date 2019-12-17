@@ -579,7 +579,7 @@ process createPSMTables {
   msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
-  msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt --addbioset
   msspsmtable quant -i prepsms.txt -o ${setname}_${peptype}_psmtable.txt --dbfile psmlookup --isobaric
   sed 's/\\#SpecFile/SpectraFile/' -i ${setname}_${peptype}_psmtable.txt
   """
@@ -589,7 +589,7 @@ process createPSMTables {
   msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
-  msspsmtable specdata -i filtpep --dbfile psmlookup -o ${setname}_${peptype}_psmtable.txt
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o ${setname}_${peptype}_psmtable.txt --addbioset
   sed 's/\\#SpecFile/SpectraFile/' -i ${setname}_${peptype}_psmtable.txt
   """
 }
