@@ -381,6 +381,7 @@ process msgfPlus {
   set val(setname), file("${sample}.mzid"), file('out.mzid.tsv') into mzidtsvs
   
   script:
+  mem = db.size() * 16 // used in conf profile
   """
   msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength $params.minlen -maxLength $params.maxlen -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i "${sample}.mzid" -o out.mzid.tsv
@@ -578,7 +579,7 @@ process createPSMTables {
   msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
   msslookup psms -i filtpep --dbfile psmlookup
-  msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt
+  msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt --addbioset
   ${params.isobaric ? "msspsmtable quant -i prepsms.txt -o ${setname}_${peptype}_psmtable.txt --dbfile psmlookup --isobaric" : "mv prepsms ${setname}_${peptype}_psmtable.txt"}
   sed 's/\\#SpecFile/SpectraFile/' -i ${setname}_${peptype}_psmtable.txt
   """
