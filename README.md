@@ -143,15 +143,14 @@ sftp> exit
 tar xvfz CosmicMutantExport.tsv.gz
 ```
 
-### Analyse your mzML files
-Example command to search TMT 10-plex labelled data.
-Remove  `--isobaric tmt10plex`  if you have label-free data.
+### Analyse your mzML files with VarDB
+Example command to search TMT 10-plex labelled data in docker
+Remove  `--isobaric` parameter if you have label-free data.
 ```
-nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \ 
+nextflow run main.nf --tdb /path/to/VarDB.fasta \
   --mzmldef spectra_file_list.txt \
   --activation hcd \
-  --isobaric tmt10plex \
-  --denoms 'set01:131 set02:131 set03:131' \
+  --isobaric 'set01:tmt10plex:131 set02:tmt10plex:131' 'set03:tmt10plex:127N' \
   --gtf /path/to/VarDB.gtf \
   --mods /path/to/tmt_mods.txt \
   --knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa \
@@ -162,7 +161,7 @@ nextflow run ipaw.nf --tdb /path/to/VarDB.fasta \
   --dbsnp /path/to/snp142CodingDbSnp.txt \
   --annovar_dir /path/to/your/annovar \
   --bigwigs /path/to/your/bigwigs \
-  --bamfiles /path/to/\*.bam --isobaric tmt10plex \
-  --outdir /path/to/results
-  -profile testing
+  --bamfiles /path/to/\*.bam \
+  --outdir /path/to/results \
+  -profile standard,docker # replace docker with singularity if needed
 ```

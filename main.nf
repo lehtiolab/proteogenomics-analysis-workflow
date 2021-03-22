@@ -34,7 +34,6 @@ params.dbsnp = false
 params.cosmic = false
 params.pisepdb = false
 params.mzmldef = false
-params.denoms = false
 params.normalpsms = false
 params.annovar_dir = false
 params.bigwigs = false
@@ -54,12 +53,6 @@ genomefa = file(params.genome)
 tdb = file(params.tdb)
 normalpsms = params.normalpsms ? file(params.normalpsms) : false
 
-activations = [hcd:'High-energy collision-induced dissociation', cid:'Collision-induced dissociation', etd:'Electron transfer dissociation']
-activationtype = activations[params.activation]
-massshifts = [tmt:0.0013, itraq:0.00125, false:0]
-plextype = params.isobaric ? params.isobaric.replaceFirst(/[0-9]+plex/, "") : false
-massshift = massshifts[plextype]
-msgfprotocol = params.isobaric ? [tmt:4, itraq:2][plextype] : 0
 
 
 /* PIPELINE START */
@@ -76,6 +69,23 @@ Channel
   .map { it -> it.tokenize('\t') }
   .set { mzml_in }
 }
+
+
+// Isobaric input parsing to setisobaric and setdenoms maps
+// example: --isobaric 'set1:tmt10plex:127N:128N set2:tmtpro:sweep set3:itraq8plex:intensity'
+isop = params.isobaric ? params.isobaric.tokenize(' ') : false
+setisobaric = isop ? isop.collect() {
+  y -> y.tokenize(':')
+}.collectEntries() {
+  x-> [x[0], x[1]]
+} : false
+// FIXME add non-isobaric sets here if we have any mixed-in?
+setdenoms = isop ? isop.collect() {
+  y -> y.tokenize(':')
+}.collectEntries() {
+  x-> [x[0], x[2..-1]]
+} : false
+
 
 mzml_in
   .tap { sets; mzmlcounter }
@@ -102,17 +112,6 @@ strips
   .unique()
   .groupTuple()
   .set { strips_for_six }
-
-// Get denominators if isobaric experiment
-// passed in form --denoms 'set1:126:128N set2:131 set4:129N:130C:131'
-if (params.isobaric && params.denoms) {
-  setdenoms = [:]
-  params.denoms.tokenize(' ').each{ it -> x=it.tokenize(':'); setdenoms.put(x[0], x[1..-1])}
-  set_denoms = Channel.value(setdenoms)
-} else if (params.isobaric) {
-  setdenoms = [:]
-  sets_for_denoms.reduce(setdenoms){ a, b -> a.put(b, ['_126']); return a }.set{ set_denoms }
-}
 
 if (params.pisepdb) {
   sets_for_six
@@ -309,9 +308,15 @@ process IsobaricQuant {
   output:
   set val(sample), file("${infile}.consensusXML") into isobaricxml
 
+  script:
+  activationtype = [hcd:'High-energy collision-induced dissociation', cid:'Collision-induced dissociation', etd:'Electron transfer dissociation'][params.activation]
+  isobtype = setisobaric && setisobaric[setname] ? setisobaric[setname] : false
+  isobtype = isobtype == 'tmtpro' ? 'tmt16plex' : isobtype
+  plextype = isobtype ? isobtype.replaceFirst(/[0-9]+plex/, "") : 'false'
+  massshift = [tmt:0.0013, itraq:0.00125, false:0][plextype]
   """
   source activate openms-blat-0.1
-  IsobaricAnalyzer  -type $params.isobaric -in $infile -out "${infile}.consensusXML" -extraction:select_activation "$activationtype" -extraction:reporter_mass_shift $massshift -extraction:min_precursor_intensity 1.0 -extraction:keep_unannotated_precursor true -quantification:isotope_correction true 
+  IsobaricAnalyzer  -type $isobtype -in $infile -out "${infile}.consensusXML" -extraction:select_activation "$activationtype" -extraction:reporter_mass_shift $massshift -extraction:min_precursor_intensity 1.0 -extraction:keep_unannotated_precursor true -quantification:isotope_correction true 
   """
 }
 
@@ -382,6 +387,7 @@ process msgfPlus {
   
   script:
   mem = db.size() * 16 // used in conf profile
+  msgfprotocol = 0
   """
   msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength $params.minlen -maxLength $params.maxlen -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i "${sample}.mzid" -o out.mzid.tsv
@@ -573,7 +579,6 @@ process createPSMTables {
   set val(setname), val(peptype), file("${setname}_${peptype}_psmtable.txt") into psmtable
 
   script:
-  if(params.isobaric)
   """
   msspsmtable conffilt -i psms -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
   msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
@@ -624,9 +629,10 @@ process prePeptideTable {
 
   script:
   """
-  msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 ${params.isobaric ? '--isobquantcolpattern plex' : ''}
+  msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 ${setisobaric && setisobaric[setname] ? '--isobquantcolpattern plex' : ''}
+  # FIXME new msstitch version will have difference in column output from psm2pep
   awk -F '\\t' 'BEGIN {OFS = FS} {print \$13,\$14,\$3,\$8,\$9,\$10,\$12,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22,\$23}' preisoquant > preordered
-  ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${set_denoms.value[setname].join(' ')} --protcol 12" : 'mv preordered peptidetable.txt'}
+  ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${setdenoms[setname].join(' ')} --protcol 12" : 'mv preordered peptidetable.txt'}
   """
 }
 
