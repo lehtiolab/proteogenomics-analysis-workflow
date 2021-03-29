@@ -1,8 +1,0 @@
-name: openms-blat-0.1
-channels:
-  - bioconda
-  - conda-forge
-  - defaults
-dependencies:
-  - bioconda::openms=2.4.0
-  - bioconda::ucsc-blat=377
