@@ -774,7 +774,6 @@ process BLATNovel {
   set val(setname), file('blat_out.pslx') into novelblat
 
   """
-  source activate openms-blat-0.1
   blat $genomefa $novelfasta -t=dnax -q=prot -tileSize=5 -minIdentity=99 -out=pslx blat_out.pslx 
   """
 }
