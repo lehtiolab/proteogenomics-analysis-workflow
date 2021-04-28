@@ -41,6 +41,7 @@ params.splitchar = false
 params.quantlookup = false
 params.minlen = 8
 params.maxlen = 50
+params.maxmiscleav = 0
 
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
@@ -388,7 +389,7 @@ process msgfPlus {
   mem = db.size() * 16 // used in conf profile
   msgfprotocol = 0
   """
-  msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength $params.minlen -maxLength $params.maxlen -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
+  msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -maxMissedCleavages ${params.maxmiscleav} -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength $params.minlen -maxLength $params.maxlen -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i "${sample}.mzid" -o out.mzid.tsv
   rm td_concat.c*
   """
@@ -723,7 +724,7 @@ groupset_mzmls
   .groupTuple()
   .tap { var_specaimzmls }
   .join(novpeps_singlemis)
-  .set { grouped_saavnov_mzml_peps }
+  .set { grouped_saavnov_mzml_psms }
   
 
 process ValidateSingleMismatchNovpeps {
@@ -731,7 +732,7 @@ process ValidateSingleMismatchNovpeps {
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: { it == "precursorError.histogram.plot.pdf" ? "${setname}_novel_precursorError_plot.pdf" : it }
   
   input:
-  set val(setname), val(samples), file(mzmls), file(peps) from grouped_saavnov_mzml_peps
+  set val(setname), val(samples), file(mzmls), file(psms) from grouped_saavnov_mzml_psms
 
   output:
   set val(setname), file("${setname}_novel_saav_specai.txt") into singlemis_specai
@@ -740,7 +741,7 @@ process ValidateSingleMismatchNovpeps {
   """
   mkdir mzmls
   for fn in $mzmls; do ln -s `pwd`/\$fn mzmls/; done
-  Rscript /SpectrumAI/SpectrumAI.R mzmls $peps ${setname}_novel_saav_specai.txt || cp $peps singlemis_specai.txt
+  Rscript /SpectrumAI/SpectrumAI.R mzmls $psms ${setname}_novel_saav_specai.txt || cp $psms singlemis_specai.txt
   """
 }
 
