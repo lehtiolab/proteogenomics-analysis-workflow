@@ -6,9 +6,9 @@ Integrated proteogenomics analysis workflow
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg)](http://bioconda.github.io/)
 [![Docker](https://img.shields.io/docker/automated/glormph/ipaw.svg)](https://hub.docker.com/r/glormph/ipaw)
 
-This is a workflow to identify, curate, and validate variant and novel peptides from MS proteomics spectra data, using the VarDB database. VarDB combines entries from COSMIC, PGOHUM, CanProVar and lncipedia. The pipeline takes mzML spectra files as input. The workflow is powered by [Nextflow](https://nextflow.io) and runs in [Docker](https://docker.com) containers.
+This is a workflow to identify, curate, and validate variant and novel peptides from MS proteomics spectra data, using databases containing novel and variant peptides, such as the VarDB database. VarDB combines entries from COSMIC, PGOHUM, CanProVar and lncipedia. The workflow takes mzML spectra files as input, is powered by [Nextflow](https://nextflow.io) and runs in [Docker](https://docker.com) or [Singularity](https://sylabs.io/singularity) containers.
 
-Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on a concatenated target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation.
+Searches are run using [MSGF+](https://omics.pnl.gov/software/ms-gf) on a concatenated target and decoy databases which are then passed to [Percolator](http://percolator.ms) for statistical evaluation, in which FDR is determined in a class specific manner, filtering out known peptides and dividing novel/variant in different FDR arms. Thereafter a curation procedure is performed in which resulting peptides are evaluated on several different criteria, dependent on the peptide.
 
 Please cite the following paper when you have used the workflow for publications :)
 
@@ -16,15 +16,13 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
 
 ![workflow image](https://github.com/lehtiolab/proteogenomics-analysis-workflow/blob/master/assets/workflow.png)
 
-### Requirements
+### Before running 
 
-  + Linux system with
-  + [Docker](https://docker.io)
-  + [Nextflow](https://nextflow.io)
-  + [Git](https://git-scm.com)
+  + Install [Docker](https://docker.io) or [Singularity](https://sylabs.io/singularity)
+  + Install [Nextflow](https://nextflow.io)
 
 
-### Pipeline inputs
+### Detailed pipeline inputs
 
   + Database search related inputs for MSGFplus
     + Spectra files input
@@ -44,20 +42,18 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     `--tdb /path/to/vardb.fa`
     
   + Quantification related inputs
-    + Labelling method. Do Not use this option if you have label-free data
+    + Labelling method. Do Not use this option if you have label-free data, include the reference channel(s)
+      for calculating relative peptide intensities. Possible options, tmtpro, tmt10plex, tmt6plex, tmt2plex, itraq8plex, itraq4plex.
+      Multiple reference channels are averaged, multiple sets are separated by a space and must match the 
+      `--mzmldef` parameter.
     
-    `--isobaric tmt10plex # tmt6plex, tmt2plex, itraq8plex, itraq4plex`
-    
-    + Reference channel to calculate relative peptide intensities
-    
-    `--denoms 'set01:130C:131' # if multiple channels specified, the average of them is used as reference channel`
-    `--denoms 'set01:126 set02:131' # different sets seperated by space, the set names need to match --mzmldef input`
+    `--isobaric 'set01:tmt10plex:130C:131 set02:tmt10plex:126'
 
   + Post-search processing inputs
   
     + map the genomic positions of VarDB peptides require the annotation GTF file of VarDB
     
-    `--gtf /path/tovardb.gtf`   
+    `--gtf /path/tovardb.gtf`
 
     + Canonical protein FASTA for catching canonical proteins and BLAST
     ```
@@ -65,6 +61,13 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     --knownproteins /path/to/Homo_sapiens.GRCh38.pep.all.fa # a prefiltering known proteins DB needed to remove known peptides during class FDR calculation 
     ```
    
+    + Annovar peptide annotation program location
+    
+    `--annovar_dir path/to/annovar # Downloaded before running, due to licensing`
+
+    + Bigwig files for phastCons/PhyloCSF:
+    `--bigwigs  /path/to/bigwigs/`
+
     + Mark novel peptides which can be explained by nsSNPs
     
     `--snpfa /path/to/MSCanProVar_ensemblV79.fa  # CanProVar annotated peptide sequences derived from known nsSNPs`   
@@ -72,16 +75,18 @@ Zhu Y, Orre LM, Johansson HJ, Huss M, Boekel J, Vesterlund M, Fernandez-Woodbrid
     + Genome FASTA to BLAT against to find potential peptides mapped to multiple genomic locations
     
     `--genome /path/to/hg19.fa` # use hg19.fa.masked version if you don't want to consider repeated regions.
+  
+  + When using the VarDB database
 
-    + SNP and COSMIC databases (to make it optional), required to map genomic positions of single amino acid variant peptides.
+    + SNP and COSMIC databases, required to map genomic positions of single amino acid variant peptides.
     ```
     --dbsnp /path/to/SNP142CodingDbSnp.txt # a text file containing genomic coordinates of coding SNPs
     --cosmic /path/to/CosmicMutantExport.tsv # a text file containing genomic coordinates of mutations
     ```
     
-    + __Optional__: RNA-Seq BAM and BAI files (in same directory) ro search for reads support in detected novel coding regions. 
+    + __Optional__: RNA-Seq BAM and BAI files (in same directory) for reads support in detected novel coding regions. 
     
-    `--bamfiles /path/to/\*.bam  # mind the backslash`
+    `--bamfiles '/path/to/*.bam'
   
   + Nextflow command option:
     + Use `-profile` option to run it in locally or submit it in slurm or sge system.
