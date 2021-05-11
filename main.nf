@@ -275,13 +275,16 @@ db_concatdecoy
 process makeProtSeq {
 
   input:
-  file knownproteins
+  file(knownproteins)
+  file(snpfa)
 
   output:
-  file('mslookup_db.sqlite') into protseqdb
+  file('knownprot.sqlite') into protseqdb
+  file('snpprot.sqlite') into snpseqdb
 
   """
-  msslookup protspace -i $knownproteins --minlen $params.minlen
+  msslookup protspace -i $knownproteins --minlen $params.minlen && mv mslookup_db.sqlite knownprot.sqlite
+  msslookup protspace -i $snpfa --minlen $params.minlen && mv mslookup_db.sqlite snpprot.sqlite
   """
 }
 
@@ -801,12 +804,13 @@ process labelnsSNP {
   input:
   set val(setname), file(peptable) from snpnovelpep
   file snpfa
+  file(snpdb) from snpseqdb
 
   output:
   set val(setname), file('nssnp.txt') into ns_snp_out
 
   """
-  label_nsSNP_pep.py --input $peptable --nsSNPdb $snpfa --output nssnp.txt
+  label_nsSNP_pep.py --input $peptable --nsSNPdb $snpfa --dbfile "$snpdb" --output nssnp.txt --minlen $params.minlen
   """
 }
 
