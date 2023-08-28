@@ -1,4 +1,4 @@
-name: ipaw-0.4
+name: ipaw-0.5
 channels:
   - bioconda
   - conda-forge
@@ -6,7 +6,7 @@ channels:
 dependencies:
   - bioconda::msgf_plus=2020.03.14
   - bioconda::openms=2.5.0
-  - bioconda::msstitch=2.18
+  - bioconda::msstitch=3.13
   - conda-forge::biopython=1.72
   - bioconda::percolator=3.4
   - bioconda::blast=2.9.0

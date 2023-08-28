@@ -132,7 +132,7 @@ process splitSetNormalSearchPsms {
   output:
   set val(setnames), file({setnames.collect() { it + '.tsv' }}) into setnormpsms
   """
-  msspsmtable split -i normalpsms --bioset
+  msstitch split -i normalpsms --splitcol bioset
   """
 }
 
@@ -150,7 +150,7 @@ process splitPlateNormalSearchPsms {
   output:
   set val(setname), val(stripnames), file({stripnames.collect() { it + '.tsv' }}) into setplatepsms
   """
-  msspsmtable split -i $normpsm --splitcol `python -c 'with open("$normpsm") as fp: h=next(fp).strip().split("\\t");print(h.index("Strip")+1)'`
+  msstitch split -i $normpsm --splitcol `python -c 'with open("$normpsm") as fp: h=next(fp).strip().split("\\t");print(h.index("Strip")+1)'`
   """
 }
 
@@ -167,7 +167,7 @@ process normalSearchPsmsToPeptides {
   output:
   set val(setname), val(strip), file('peptides') into setplatepeptides
   """
-  msspeptable psm2pep -i $normpsm -o peptides --scorecolpattern area --spectracol 1 
+  msstitch peptides -i $normpsm -o peptides --scorecolpattern area --spectracol 1 
   """
 }
 
@@ -227,12 +227,12 @@ process makeTargetSeqLookup {
   # create text file of pi sep (much faster to import to SQLite than fasta)
   ${params.pisepdb ? "cut -f2 $tdb | sort -u > targetseq.txt" : "grep -v '^>' $tdb > targetseq.txt"}
   # Add trypsinized known proteins to txt file
-  msslookup trypsinize -i $knownproteins -o knowntryp
+  msstitch trypsinize -i $knownproteins -o knowntryp
   grep -v '^>' knowntryp >> targetseq.txt
 
   # TODO parametrize notrypsin?
-  msslookup seqspace -i targetseq.txt --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
-  msslookup makedecoy -i $knownproteins --dbfile mslookup_db.sqlite -o decoy_known.fa --scramble tryp_rev --minlen $params.minlen
+  msstitch storeseq -i targetseq.txt --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
+  msstitch makedecoy -i $knownproteins --dbfile mslookup_db.sqlite -o decoy_known.fa --scramble tryp_rev --minlen $params.minlen
   """
 }
 
@@ -259,7 +259,7 @@ process concatFasta {
   # copy DB for faster access on network FS
   cp ${targetlookup} localdb.sql
   cat $db $knownproteins > td_concat.fa
-  msslookup makedecoy -i $db --dbfile localdb.sql -o decoy_db.fa --scramble tryp_rev --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
+  msstitch makedecoy -i $db --dbfile localdb.sql -o decoy_db.fa --scramble tryp_rev --minlen $params.minlen ${params.pisepdb ? '--notrypsin': ''}
   cat decoy_db.fa decoy_known.fa >> td_concat.fa
   rm decoy_db.fa localdb.sql
   """
@@ -283,8 +283,8 @@ process makeProtSeq {
   file('snpprot.sqlite') into snpseqdb
 
   """
-  msslookup protspace -i $knownproteins --minlen $params.minlen && mv mslookup_db.sqlite knownprot.sqlite
-  msslookup protspace -i $snpfa --minlen $params.minlen && mv mslookup_db.sqlite snpprot.sqlite
+  msstitch storeseq -i $knownproteins --minlen $params.minlen --fullprotein --minlen 7 -o knownprot.sqlite
+  msstitch storeseq -i $snpfa --minlen $params.minlen -o snpprot.sqlite --fullprotein --minlen 7
   """
 }
 
@@ -297,7 +297,7 @@ process makeTrypSeq {
   file('mslookup_db.sqlite') into trypseqdb
 
   """
-  msslookup seqspace -i $knownproteins --insourcefrag --minlen $params.minlen
+  msstitch storeseq -i $knownproteins --insourcefrag --minlen $params.minlen
   """
 }
 
@@ -355,12 +355,12 @@ process createSpectraLookup {
   script:
   if(params.isobaric)
   """
-  msslookup spectra -i ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
-  msslookup isoquant --dbfile mslookup_db.sqlite -i ${isobxmls.join(' ')} --spectra ${mzmlfiles.join(' ')}
+  msstitch storespectra --spectra ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
+  msstitch storequant --dbfile mslookup_db.sqlite --isobaric ${isobxmls.join(' ')} --spectra ${mzmlfiles.join(' ')}
   """
   else
   """
-  msslookup spectra -i ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
+  msslookup spectra --spectra ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
   """
 }
 
@@ -436,8 +436,9 @@ process getVariantPercolator {
   output:
   set val(setname), val('variant'), file("${x}_h0.xml") into var_perco
   """
-  msspercolator splitprotein -i $x --protheaders \'${params.varheaders}\'
+  msstitch splitperco -i $x --protheaders \'${params.varheaders}\'
   """
+// FIXME need to check this one, header thing has changed
 }
 
 
@@ -451,7 +452,7 @@ process getNovelPercolator {
   output:
   set val(setname), val('novel'), file("${x}_h0.xml") into nov_perco
   """
-  msspercolator splitprotein -i $x --protheaders \'${params.novheaders}\'
+  msstitch splitperco -i $x --protheaders \'${params.novheaders}\'
   """
 }
 
@@ -479,8 +480,8 @@ process filterPercolator {
   """
   else
   """
-  msspercolator filterseq -i $perco -o filtseq --dbfile trypseqdb --insourcefrag 2 --deamidate 
-  msspercolator filterprot -i filtseq -o filtprot --fasta $knownproteins --dbfile protseqdb --minlen $params.minlen --deamidate
+  msstitch filterperco -i $perco -o filtseq --dbfile trypseqdb --insourcefrag 2 --deamidate 
+  msstitch filterperco -i filtseq -o filtprot --fullprotein --dbfile protseqdb --minlen $params.minlen --deamidate
   """
 }
 
@@ -583,12 +584,10 @@ process createPSMTables {
 
   script:
   """
-  msspsmtable conffilt -i psms -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
-  msspsmtable conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
+  msstitch conffilt -i psms -o filtpsm --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'PSM q-value'
+  msstitch conffilt -i filtpsm -o filtpep --confidence-better lower --confidence-lvl 0.01 --confcolpattern 'peptide q-value'
   cp lookup psmlookup
-  msslookup psms -i filtpep --dbfile psmlookup
-  msspsmtable specdata -i filtpep --dbfile psmlookup -o prepsms.txt --addbioset
-  ${params.isobaric ? "msspsmtable quant -i prepsms.txt -o ${setname}_${peptype}_psmtable.txt --dbfile psmlookup --isobaric" : "mv prepsms ${setname}_${peptype}_psmtable.txt"}
+  msstitch psmtable -i filtpep --dbfile psmlookup --addbioset -o ${setname}_${peptype}_psmtable.txt ${params.isobaric ? '--isobaric': ''}
   sed 's/\\#SpecFile/SpectraFile/' -i ${setname}_${peptype}_psmtable.txt
   """
 }
@@ -631,11 +630,13 @@ process prePeptideTable {
   set val(setname), val(peptype), file('peptidetable.txt') into peptable
 
   script:
+// FIXME this needs verifying!
   """
-  msspeptable psm2pep -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 ${setisobaric && setisobaric[setname] ? '--isobquantcolpattern plex' : ''}
   # FIXME new msstitch version will have difference in column output from psm2pep
+  msstitch peptides -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 \
+    ${setisobaric && setisobaric[setname] ? "--isobquantcolpattern plex --minint 0.1 --logisoquant --denompatterns ${setdenoms[setname].join(' ')}" : ''}
   awk -F '\\t' 'BEGIN {OFS = FS} {print \$13,\$14,\$3,\$8,\$9,\$10,\$12,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22,\$23}' preisoquant > preordered
-  ${params.isobaric ? "msspsmtable isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${setdenoms[setname].join(' ')} --protcol 12" : 'mv preordered peptidetable.txt'}
+  #${params.isobaric ? "msstitch isoratio -i psms.txt -o peptidetable.txt --targettable preordered --isobquantcolpattern plex --minint 0.1 --denompatterns ${set_denoms.value[setname].join(' ')} --protcol 12" : 'mv preordered peptidetable.txt'}
   """
 }
 
