@@ -504,68 +504,17 @@ variantmzidtsv
 process svmToTSV {
 
   input:
-  set val(setname), file('mzident?'), file('mzidtsv?'), val(peptype), file(perco) from allmzperco 
+  set val(setname), file(mzids), file(tsvs), val(peptype), file(perco) from allmzperco 
 
   output:
-  set val(setname), val(peptype), file('mzidperco') into mzidtsv_perco
+  set val(setname), val(peptype), file('target.tsv') into mzidtsv_perco
 
   script:
   """
-#!/usr/bin/env python
-from glob import glob
-from lxml import etree
-mzidtsvfns = sorted(glob('mzidtsv*'))
-mzidfns = sorted(glob('mzident*'))
-from app.readers import pycolator, xml, tsv, mzidplus
-import os
-ns = xml.get_namespace_from_top('$perco', None)
-psms = {}
-psms = {p.attrib['{%s}psm_id' % ns['xmlns']]: (float(p.find('{%s}svm_score' % ns['xmlns']).text),
-            p.attrib['{%s}decoy' % ns['xmlns']] == 'true') for p in pycolator.generate_psms('$perco', ns)}
-decoys = {True: 0, False: 0}
-for psm in sorted([(pid, score, decoy) for pid, (score, decoy) in psms.items()], reverse=True, key=lambda x:x[1]):
-    decoys[psm[2]] += 1
-    try:
-        psms[psm[0]] = {'decoy': psm[2], 'svm': psm[1], 'qval': decoys[True]/decoys[False]}  # T-TDC
-    except ZeroDivisionError:
-        psms[psm[0]] = {'decoy': psm[2], 'svm': psm[1], 'qval': 1.0}  # T-TDC
-decoys = {'true': 0, 'false': 0}
-for svm, decoy, psm_ids in sorted([(float(x.find('{%s}svm_score' % ns['xmlns']).text), x.attrib['{%s}decoy' % ns['xmlns']], x.find('{%s}psm_ids' % ns['xmlns'])) for x in pycolator.generate_peptides('$perco', ns)], reverse=True, key=lambda x:x[0]):
-    decoys[decoy] += 1
-    for pid in psm_ids:
-        try:
-            psms[pid.text].update({'pepqval': decoys['true']/decoys['false']})
-        except ZeroDivisionError:
-            psms[pid.text].update({'pepqval': 1.0})
-        except KeyError:
-            # This happens when MSGF has multiple PSMs for a peptide, but for some reason the PSMs get different FA header matching.
-            # So, it (incorrectly?) matches to e.g. no-ENSPs https://github.com/MSGFPlus/msgfplus/issues/78
-            # And when the PSMs with ENSP are thrown out by filter, it then cant find them anymore when back tracking from the percolator peptide
-            # PSM ids, (peptide has no ENSP annotation and is thus kept).
-            # For now, throw out the PSM FIXME
-            [psms[x].update({'pepqval': 1}) for x in psm_ids if x in psms]
-        
-oldheader = tsv.get_tsv_header(mzidtsvfns[0])
-header = oldheader + ['percolator svm-score', 'PSM q-value', 'peptide q-value']
-with open('mzidperco', 'w') as fp:
-    fp.write('\\t'.join(header))
-    for fnix, mzidfn in enumerate(mzidfns):
-        mzns = mzidplus.get_mzid_namespace(mzidfn)
-        siis = (sii for sir in mzidplus.mzid_spec_result_generator(mzidfn, mzns) for sii in sir.findall('{%s}SpectrumIdentificationItem' % mzns['xmlns']))
-        for specidi, psm in zip(siis, tsv.generate_tsv_psms(mzidtsvfns[fnix], oldheader)):
-            # percolator psm ID is: samplename_SII_scannr_rank_scannr_charge_rank
-            scan, rank = specidi.attrib['id'].replace('SII_', '').split('_')
-            outpsm = {k: v for k,v in psm.items()}
-            spfile = os.path.splitext(psm['#SpecFile'])[0]
-            try:
-                percopsm = psms['{fn}_SII_{sc}_{rk}_{sc}_{ch}_{rk}'.format(fn=spfile, sc=scan, rk=rank, ch=psm['Charge'])]
-            except KeyError:
-                continue
-            if percopsm['decoy']:
-                continue
-            fp.write('\\n')
-            outpsm.update({'percolator svm-score': percopsm['svm'], 'PSM q-value': percopsm['qval'], 'peptide q-value': percopsm['pepqval']})
-            fp.write('\\t'.join([str(outpsm[k]) for k in header]))
+  mkdir outtables
+  msstitch perco2psm --perco $perco -d outtables -i ${tsvs.collect() { "'$it'" }.join(' ')} --mzids ${mzids.collect() { "'$it'" }.join(' ')}
+  msstitch concat -i outtables/* -o psms
+  msstitch split -i psms --splitcol TD
   """
 }
 
