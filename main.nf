@@ -78,7 +78,6 @@ if (!params.mzmldef && !params.input) {
   }
   Channel
     .from(mzmllines)
-    .map { it -> it.tokenize('\t') }
     .set { mzml_in }
 }
 
