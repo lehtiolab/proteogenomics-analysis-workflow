@@ -34,6 +34,7 @@ params.dbsnp = false
 params.cosmic = false
 params.pisepdb = false
 params.mzmldef = false
+params.input = false
 params.normalpsms = false
 params.annovar_dir = false
 params.bigwigs = false
@@ -59,16 +60,26 @@ normalpsms = params.normalpsms ? file(params.normalpsms) : false
 /* PIPELINE START */
 
 // Either feed an mzmldef file (tab separated lines with filepath\tsetname), or /path/to/\*.mzML
-if (!params.mzmldef) {
-Channel
-  .fromPath(params.mzmls)
-  .map { it -> [it, 'NA'] }
-  .set { mzml_in }
+if (!params.mzmldef && !params.input) {
+  Channel
+    .fromPath(params.mzmls)
+    .map { it -> [it, 'NA'] }
+    .set { mzml_in }
 } else {
-Channel
-  .from(file("${params.mzmldef}").readLines())
-  .map { it -> it.tokenize('\t') }
-  .set { mzml_in }
+  header = ['mzmlfile', 'instrument', 'setname', 'plate', 'fraction']
+  mzmldef = params.mzmldef ?: params.input
+  mzmllines = file(mzmldef).readLines().collect { it.tokenize('\t') }
+  if (mzmllines[0] == header) {
+    /* As above, future use with pushing files with a header becomes enabled, as long as
+    they use this header format. We cannot do module importing etc yet, have to use DSL2
+    for that. That is something to strive for in the future.
+    */
+    mzmllines.remove(0)
+  }
+  Channel
+    .from(mzmllines)
+    .map { it -> it.tokenize('\t') }
+    .set { mzml_in }
 }
 
 
