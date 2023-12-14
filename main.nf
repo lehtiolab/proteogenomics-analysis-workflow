@@ -421,8 +421,9 @@ process percolator {
   output:
   set val(setname), file('perco.xml') into percolated
 
+  script:
+  mzmlcount = samples.size() 
   """
-  echo $samples
   mkdir mzids
   count=1;for sam in ${samples.join(' ')}; do ln -s `pwd`/mzid\$count mzids/\${sam}.mzid; echo mzids/\${sam}.mzid >> metafile; ((count++));done
   msgf2pin -o percoin.xml -e trypsin -P "decoy_" metafile
