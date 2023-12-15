@@ -515,15 +515,23 @@ variantmzidtsv
 process svmToTSV {
 
   input:
-  set val(setname), file(mzids), file(tsvs), val(peptype), file(perco) from allmzperco 
+  set val(setname), file('mzid?'), file('tsv?'), val(peptype), file(perco) from allmzperco 
 
   output:
   set val(setname), val(peptype), file('target.tsv') into mzidtsv_perco
 
   script:
   """
+  tsvs=""
+  mzids=""
+  count=1; for tsvfn in \$(ls tsv*)
+    do 
+    tsvs="\${tsvs} tsv\${count}"
+    mzids="\${mzids} mzid\${count}"
+    ((count++))
+    done
   mkdir outtables
-  msstitch perco2psm --perco $perco -d outtables -i ${tsvs.collect() { "'$it'" }.join(' ')} --mzids ${mzids.collect() { "'$it'" }.join(' ')}
+  msstitch perco2psm --perco $perco -d outtables -i \$tsvs --mzids \$mzids
   msstitch concat -i outtables/* -o psms
   msstitch split -i psms --splitcol TD
   """
