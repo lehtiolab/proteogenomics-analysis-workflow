@@ -603,7 +603,7 @@ process prePeptideTable {
   # FIXME new msstitch version will have difference in column output from psm2pep
   msstitch peptides -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 \
     ${setisobaric && setisobaric[setname] ? "--isobquantcolpattern plex --minint 0.1 --logisoquant --denompatterns ${setdenoms[setname].join(' ')}" : ''}
-  awk -F '\\t' 'BEGIN {OFS = FS} {print \$13,\$14,\$3,\$8,\$9,\$10,\$12,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22,\$23}' preisoquant > preordered
+  awk -F '\\t' 'BEGIN {OFS = FS} {print \$13,\$14,\$3,\$8,\$9,\$10,\$12,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22,\$23}' preisoquant > peptidetable.txt 
   """
 }
 
