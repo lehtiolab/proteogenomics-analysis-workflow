@@ -68,7 +68,7 @@ for rf in ["+0","+1","+2","+3","-0","-1","-2","-3"]:
             try:
                 score = bw.stats(chrom[r], starts[r], ends[r])[0]
             except RuntimeError:
-                pass
+                score = None
             frame_score[r] = score
             scores[rf] = frame_score
         bw.close()

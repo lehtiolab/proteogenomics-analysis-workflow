@@ -48,7 +48,7 @@ for line in open(infile):
     except:
         print("Encountered error for line: " + line.strip())
         max_val = -1
-        min_val = -1
+        mean_val = -1
     
     if pept not in pep_dic:
         pep_dic[pept]=[max_val, mean_val]
