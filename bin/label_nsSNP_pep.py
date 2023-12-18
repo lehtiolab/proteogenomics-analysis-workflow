@@ -46,7 +46,7 @@ for line in input1:
     row=line.strip().split("\t")
     pep = row[0].replace('L', 'I')
     query_output = "No match in SNP-DB"
-    cur = conn.execute('SELECT protid, pos FROM protein_peptides WHERE seq="{}"'.format(pep[:int(minpeplen)]))
+    cur = conn.execute('SELECT protein_acc, pos FROM protein_peptides WHERE seq="{}"'.format(pep[:int(minpeplen)]))
     snpprots = [(protid, pos) for protid, pos in cur]
     for prot_id, pos in snpprots:
         protseq = whole_proteins[prot_id]
