@@ -21,29 +21,6 @@ if( ! nextflow.version.matches(">= ${nf_required_version}") ){
 }
 
 
-/* SET DEFAULT PARAMS */
-params.isobaric = false
-params.activation = 'hcd'
-params.bamfiles = false
-params.mods = false
-params.novheaders = false
-params.varheaders = false
-params.saavheader = false
-params.noclassfdr = false
-params.dbsnp = false
-params.cosmic = false
-params.pisepdb = false
-params.mzmldef = false
-params.input = false
-params.normalpsms = false
-params.annovar_dir = false
-params.bigwigs = false
-params.splitchar = false
-params.quantlookup = false
-params.minlen = 8
-params.maxlen = 50
-params.maxmiscleav = 0
-
 mods = file(params.mods)
 knownproteins = file(params.knownproteins)
 blastdb = file(params.blastdb)
