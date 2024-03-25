@@ -368,7 +368,7 @@ process msgfPlus {
   // If problems arise, try to use an older version: msgf_plus:2016.10.26--py27_1
 
   input:
-  set val(setfr_id), file(db), val(setname), val(sample), file(x) from mzml_msgf
+  set val(setfr_id), file(db), val(setname), val(sample), file(mzml) from mzml_msgf
   file mods
 
   output:
@@ -379,7 +379,7 @@ process msgfPlus {
   mem = db.size() * 16 // used in conf profile
   msgfprotocol = 0
   """
-  msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $x -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -maxMissedCleavages ${params.maxmiscleav} -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength $params.minlen -maxLength $params.maxlen -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
+  msgf_plus -Xmx${task.memory.toMega()}M -d $db -s $mzml -o "${sample}.mzid" -thread ${task.cpus * params.threadspercore} -mod $mods -maxMissedCleavages ${params.maxmiscleav} -tda 0 -t 10.0ppm -ti -1,2 -m 0 -inst 3 -e 1 -protocol ${msgfprotocol} -ntt 2 -minLength $params.minlen -maxLength $params.maxlen -minCharge 2 -maxCharge 6 -n 1 -addFeatures 1
   msgf_plus -Xmx3500M edu.ucsd.msjava.ui.MzIDToTsv -i "${sample}.mzid" -o out.mzid.tsv
   rm td_concat.c*
   """
