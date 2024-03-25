@@ -43,7 +43,7 @@ if (!params.mzmldef && !params.input) {
     .map { it -> [it, 'NA'] }
     .set { mzml_in }
 } else {
-  header = ['mzmlfile', 'instrument', 'setname', 'plate', 'fraction']
+  header = ['mzmlfile', 'setname', 'plate', 'fraction']
   mzmldef = params.mzmldef ?: params.input
   mzmllines = file(mzmldef).readLines().collect { it.tokenize('\t') }
   if (mzmllines[0] == header) {
