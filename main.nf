@@ -578,12 +578,9 @@ process prePeptideTable {
   set val(setname), val(peptype), file('peptidetable.txt') into peptable
 
   script:
-// FIXME this needs verifying!
   """
-  # FIXME new msstitch version will have difference in column output from psm2pep
-  msstitch peptides -i psms.txt -o preisoquant --scorecolpattern svm --spectracol 1 \
+  msstitch peptides -i psms.txt -o peptidetable.txt --scorecolpattern svm --spectracol 1 \
     ${setisobaric && setisobaric[setname] ? "--isobquantcolpattern plex --minint 0.1 --logisoquant --denompatterns ${setdenoms[setname].join(' ')}" : ''}
-  awk -F '\\t' 'BEGIN {OFS = FS} {print \$13,\$14,\$3,\$8,\$9,\$10,\$12,\$15,\$16,\$17,\$18,\$19,\$20,\$21,\$22,\$23}' preisoquant > peptidetable.txt 
   """
 }
 
@@ -999,7 +996,7 @@ process mergeSetPeptidetable {
 
   """
   # build non-changing fields (seq based fields) table:
-  fixfields=`head -n1 peps1 |tr -s '\\t' '\\n' | egrep -vn '(Setname|Spectrum|q-val|plex|${acc_removemap[peptype]})' | cut -f 1 -d ':'`
+  fixfields=`head -n1 peps1 |tr -s '\\t' '\\n' | egrep -vn '(Setname|Spectrum|Files|Charge|q-val|plex|${acc_removemap[peptype]})' | cut -f 1 -d ':'`
   fixfields=`echo \$fixfields | sed 's/ /,/g'`
   head -n1 peps1 | cut -f `echo \$fixfields` > fixheader
   count=1; for setn in ${setnames.join(' ')} ; do
