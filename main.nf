@@ -423,10 +423,11 @@ process getVariantPercolator {
 
   output:
   set val(setname), val('variant'), file("${x}_h0.xml") into var_perco
+
+  script:
   """
-  msstitch splitperco -i $x --protheaders \'${params.varheaders}\'
+  msstitch splitperco -i $x --protheaders "known:${params.knownheaders}|novel:${params.varheaders}"
   """
-// FIXME need to check this one, header thing has changed
 }
 
 
@@ -439,8 +440,10 @@ process getNovelPercolator {
 
   output:
   set val(setname), val('novel'), file("${x}_h0.xml") into nov_perco
+
+  script:
   """
-  msstitch splitperco -i $x --protheaders \'${params.novheaders}\'
+  msstitch splitperco -i $x --protheaders "known:${params.knownheaders}|novel:${params.novheaders}"
   """
 }
 
