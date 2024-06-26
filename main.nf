@@ -259,7 +259,7 @@ db_concatdecoy
   .map { it -> [it[0][0], it[0][1], it[1][1], it[1][2], it[1][3]] } // dbid, db, set, sample, file
   .set { mzml_msgf }
 
-process makeProtSeq {
+process prepareFilterDB {
 
   input:
   file(knownproteins)
@@ -268,22 +268,11 @@ process makeProtSeq {
   output:
   file('knownprot.sqlite') into protseqdb
   file('snpprot.sqlite') into snpseqdb
+  file('mslookup_db.sqlite') into trypseqdb
 
   """
   msstitch storeseq -i $knownproteins --minlen $params.minlen --fullprotein --minlen 7 -o knownprot.sqlite
   msstitch storeseq -i $snpfa --minlen $params.minlen -o snpprot.sqlite --fullprotein --minlen 7
-  """
-}
-
-process makeTrypSeq {
-
-  input:
-  file knownproteins
-
-  output:
-  file('mslookup_db.sqlite') into trypseqdb
-
-  """
   msstitch storeseq -i $knownproteins --insourcefrag --minlen $params.minlen
   """
 }
@@ -326,7 +315,7 @@ mzmlfiles
   .set{ mzmlfiles_all }
 
 
-process createSpectraLookup {
+process createNewSpectraLookup {
 
   publishDir "${params.outdir}", mode: 'copy', overwrite: true, saveAs: {it == 'mslookup_db.sqlite' ? 'quant_lookup.sql' : null }
 
@@ -347,7 +336,7 @@ process createSpectraLookup {
   """
   else
   """
-  msslookup spectra --spectra ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
+  msstitch storespectra --spectra ${mzmlfiles.join(' ')} --setnames ${setnames.join(' ')}
   """
 }
 
@@ -521,7 +510,7 @@ mzidtsv_perco
   .combine(spec_lookup)
   .set { prepsm }
 
-process createPSMTables {
+process createPSMTable {
 
   input:
   set val(setname), val(peptype), file('psms'), file('lookup') from prepsm
